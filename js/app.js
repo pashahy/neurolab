@@ -153,8 +153,11 @@ function route() {
   app.submittedKey = null;
   app.root.replaceChildren();
   app.root.classList.toggle('admin-root', a === 'admin');
-  window.scrollTo(0, 0);
+  document.body.classList.toggle('no-orbs', a === 'admin'); // без светящихся пятен на экранах админ-панели
   const lessonRoute = a === 'd' && b && c;
+  // главная и карта курса: на широком экране контейнер до 1200 px
+  app.root.classList.toggle('wide', !lessonRoute && !isDemo(a) && !['login', 'admin', 'rating', 'profile'].includes(a));
+  window.scrollTo(0, 0);
   const needsMe = a !== 'login' && !isDemo(a) && a !== 'rating' && a !== 'profile'; // главная, карта курса, занятие
   const render = () => {
     if (a === 'd' && b && c) return renderLesson(app, b, Number(c));

@@ -3,14 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#f6f4fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141219" media="(prefers-color-scheme: dark)">
   <title>НейроЛаб — практикум</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+  <link rel="preload" href="fonts/onest-cyrillic-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/admin.css">
 </head>
-<body>
-  <header class="topbar"><a href="#/" class="brand">🧠 НейроЛаб</a><span class="topbar-sub">практикум</span></header>
+<body class="orbs-bg">
+  <header class="topbar"><a href="#/" class="brand"><span class="brand-mark" aria-hidden="true"></span>НейроЛаб</a><span class="topbar-sub">практикум</span></header>
   <main id="app"><p class="card">Если вы видите это сообщение, обновите браузер: нужен iOS 14+ или Chrome 86+.</p></main>
   <footer class="site-foot"><a href="#/admin">Преподаватель</a></footer>
   <noscript><p class="card">Для работы практикума включите JavaScript.</p></noscript>

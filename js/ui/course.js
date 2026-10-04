@@ -1,8 +1,7 @@
 import { h, add } from '../util/dom.js';
-import { loadCourse, isLessonOpen, courseAccess, deadlineInfo, hasTeacherGrades } from '../content.js';
+import { loadCourse, flatLessons, courseAccess, deadlineInfo, hasTeacherGrades } from '../content.js';
 import { lessonKey } from '../store.js';
-
-const SUB = { done: pct => `Сдано · лучший результат ${pct}%`, open: () => 'Доступно', locked: () => 'Закрыто преподавателем', soon: () => 'Скоро' };
+import { coursePath, routeStop, pathInputs, progressCount } from './course-path.js';
 
 export async function renderCourse(app, d) {
   const my = app.routeId;
@@ -18,38 +17,58 @@ export async function renderCourse(app, d) {
     return;
   }
   const grades = app.store.grades();
-  let firstTodo = null;
-  add(app.root, h('a', { href: '#/', class: 'back' }, '← Главная'), h('h1', {}, `${course.icon} ${course.code} · ${course.short}`), h('p', { class: 'muted' }, course.title));
+  const lessons = flatLessons(course);
+  const { isOpen, doneSet } = pathInputs(lessons, acc, app.store, d);
+  // состояние каждого ПЗ — та же функция, что и путь на главной, но по всем ПЗ; неготовые — «скоро»
+  const path = coursePath(lessons, doneSet, isOpen, Infinity);
+  const state = new Map(path.map(s => [s.n, s.state]));
+  const now = path.find(s => s.state === 'now');
+  const cnt = progressCount(lessons, doneSet, isOpen);
+  const w = cnt.total ? Math.round(cnt.done / cnt.total * 100) : 0;
+  const num = d.slice(-2);
+
+  const map = h('div', { class: 'course-map' });
+  add(app.root, h('div', { class: 'course-layout' },
+    h('aside', { class: 'course-head' },
+      h('a', { href: '#/', class: 'back' }, '← Главная'),
+      h('div', { class: 'course-head-row' },
+        h('div', { class: `cover big c${num}`, 'aria-hidden': 'true' }, h('span', {}, num)),
+        h('div', { class: 'course-head-text' },
+          h('p', { class: 'course-code' }, course.code),
+          h('h1', { class: 'display course-name' }, course.short))),
+      h('p', { class: 'muted course-full' }, course.title),
+      h('div', { class: 'course-stat' },
+        h('div', { class: 'progress', role: 'img', 'aria-label': `Сдано ${w}% доступных занятий` }, h('div', { class: 'bar', style: `width:${w}%` })),
+        h('p', { class: 'hint' }, `Сдано ${cnt.done} из ${cnt.total} доступных занятий`)),
+      now ? h('a', { class: 'btn primary big', href: `#/d/${d}/${now.n}` }, `${app.store.getDraft(lessonKey(d, now.n)) != null ? 'Продолжить' : 'Начать'} ПЗ №${now.n}`) : ''),
+    map));
+
+  let current = null;
   for (const s of course.sections) {
-    const sec = h('section', { class: 'section' }, h('h2', {}, `Раздел ${s.n}. ${s.title}`));
+    const sec = h('section', { class: 'section' }, h('h2', { class: 'sec-head' }, h('span', { class: 'sec-num' }, `Раздел ${s.n}`), h('span', { class: 'sec-name' }, s.title)));
     for (const t of s.topics) {
       if (!t.lessons.some(l => l.ready)) {
         sec.append(h('div', { class: 'topic soon' }, h('h3', {}, `Тема ${t.id}. ${t.title}`), h('p', { class: 'hint' }, t.lessons.length ? `Занятий: ${t.lessons.length} — скоро` : 'Скоро')));
         continue;
       }
-      const path = h('ol', { class: 'path' });
-      t.lessons.forEach((l, i) => {
-        const prog = app.store.progress(lessonKey(d, l.n));
-        const state = !l.ready ? 'soon' : !isLessonOpen(acc, l.n) ? 'locked' : prog ? 'done' : 'open';
-        const pct = prog?.max ? Math.round(prog.best / prog.max * 100) : 0;
-        const dl = state === 'open' ? deadlineInfo(acc, l.n) : null;
-        const graded = hasTeacherGrades(grades, lessonKey(d, l.n));
-        const inner = [
-          h('span', { class: 'node', 'aria-hidden': 'true' }, state === 'done' ? '✓' : state === 'locked' ? '🔒' : String(l.n)),
-          h('span', { class: 'node-text' }, h('span', { class: 'node-title' }, `ПЗ №${l.n}. ${l.title}`), h('span', { class: 'node-sub' }, SUB[state](pct)),
-            dl ? h('span', { class: `node-sub deadline${dl.overdue ? ' overdue' : ''}` }, dl.overdue ? '⏰ срок прошёл, можно сдать с отметкой' : `⏰ Срок: до ${dl.label}`) : ''),
-          graded ? h('span', { class: 'node-grade', role: 'img', 'aria-label': 'Есть оценка преподавателя', title: 'Есть оценка преподавателя' }, '💬') : '',
-        ];
-        const item = state === 'open' || state === 'done'
-          ? h('a', { class: `node-link ${state}`, href: `#/d/${d}/${l.n}` }, inner)
-          : h('div', { class: `node-link ${state}`, 'aria-disabled': 'true' }, inner);
-        const li = h('li', { class: `step ${i % 2 ? 'right' : 'left'}` }, item);
-        if (state === 'open' && !firstTodo) firstTodo = li;
-        path.append(li);
-      });
-      sec.append(h('div', { class: 'topic' }, h('h3', {}, `Тема ${t.id}. ${t.title}`), path));
+      const route = h('ol', { class: 'route' });
+      for (const l of t.lessons) {
+        const st = state.get(l.n) || 'soon';
+        const key = lessonKey(d, l.n);
+        const li = routeStop({ n: l.n, title: l.title, state: st }, {
+          d,
+          open: isOpen(l.n),
+          prog: app.store.progress(key),
+          draft: st === 'now' && app.store.getDraft(key) != null,
+          deadline: st === 'now' || st === 'open' ? deadlineInfo(acc, l.n) : null,
+          graded: hasTeacherGrades(grades, key),
+        });
+        if (st === 'now') current = li;
+        route.append(li);
+      }
+      sec.append(h('div', { class: 'topic' }, h('h3', {}, `Тема ${t.id}. ${t.title}`), route));
     }
-    app.root.append(sec);
+    map.append(sec);
   }
-  firstTodo?.scrollIntoView({ block: 'center' });
+  current?.scrollIntoView({ block: 'center' });
 }

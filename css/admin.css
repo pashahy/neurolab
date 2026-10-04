@@ -1,10 +1,12 @@
 /* Админ-панель преподавателя (#/admin…). Подключается после app.css. */
 main.admin-root { max-width: 1180px; }
-.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+/* без светящихся пятен: класс на body ставит js/app.js на экранах админ-панели */
+body.no-orbs::before { display: none; }
+.mono { font-family: var(--font-mono); }
 .ok-text { color: var(--ok); }
 .late-badge { margin-left: 8px; color: var(--bad); font-weight: 600; }
 
-.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: var(--bad-ink); }
 .btn.danger-ghost { color: var(--bad); border-color: var(--bad); background: transparent; }
 input[type="checkbox"] { width: 24px; height: 24px; min-height: 0; padding: 0; flex: none; accent-color: var(--primary); }
 input[type="file"] { padding: 8px; }
@@ -17,9 +19,10 @@ input[type="file"] { padding: 8px; }
 .admin-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .admin-bar h1 { margin: 0; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.admin-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.admin-tab { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; }
-.admin-tab.active { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.admin-tab { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 16px; border-radius: var(--radius-pill); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; transition: border-color 0.18s var(--ease), background-color 0.18s var(--ease); }
+/* активная вкладка: градиентная рамка (border-box) поверх мягкой заливки (padding-box) */
+.admin-tab.active { border-color: transparent; background: linear-gradient(var(--primary-soft), var(--primary-soft)) padding-box, var(--grad) border-box; }
 .admin-head .card.form { margin-top: 10px; }
 
 .admin-tools .tools-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -28,13 +31,15 @@ input[type="file"] { padding: 8px; }
 
 /* таблицы: на телефоне строки превращаются в карточки */
 .table-wrap { overflow-x: auto; }
-table.rtable { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+table.rtable { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.95rem; }
 .rtable th { text-align: left; font-size: 0.85rem; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.rtable thead th:first-child { border-top-left-radius: calc(var(--radius) - 1px); }
+.rtable thead th:last-child { border-top-right-radius: calc(var(--radius) - 1px); }
 .rtable td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.rtable tr:last-child td { border-bottom: 0; }
+.rtable tbody tr:last-child td { border-bottom: 0; }
 .rtable .cell-name { font-weight: 600; }
 .rtable .cell-actions .row { margin: 0; flex-wrap: wrap; gap: 6px; }
-.badge-st { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.85rem; font-weight: 600; background: var(--surface-2); }
+.badge-st { display: inline-block; white-space: nowrap; padding: 2px 10px; border-radius: var(--radius-pill); font-size: 0.85rem; font-weight: 600; background: var(--surface-2); }
 .badge-st.st-active { background: var(--ok-soft); color: var(--ok); }
 .badge-st.st-new { background: var(--primary-soft); color: var(--primary); }
 .badge-st.st-blocked { background: var(--bad-soft); color: var(--bad); }
@@ -62,14 +67,14 @@ table.rtable { width: 100%; border-collapse: collapse; background: var(--surface
 }
 .rtable.compact td { padding: 4px 12px; }
 
-.cred { background: var(--surface-2); border-radius: 10px; padding: 12px; line-height: 1.8; }
+.cred { background: var(--surface-2); border-radius: var(--radius); padding: 12px; line-height: 1.8; }
 .big-pw { font-size: 1.5rem; letter-spacing: 0.06em; }
 .import-preview { margin: 8px 0; }
 .error-list { color: var(--bad); margin: 6px 0; padding-left: 20px; }
 .result-card h2 { margin-bottom: 6px; }
 
 /* окно подтверждения */
-.modal-wrap { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(10 12 20 / 0.55); }
+.modal-wrap { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(10 12 20 / 0.6); }
 .modal { width: 100%; max-width: 440px; margin: 0; max-height: 90vh; overflow-y: auto; }
 .modal-body { margin-bottom: 8px; overflow-wrap: anywhere; }
 .modal-actions { justify-content: flex-end; }
@@ -82,7 +87,6 @@ table.journal { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .journal th.jname { position: sticky; left: 0; z-index: 2; text-align: left; padding: 8px 10px; background: var(--surface-2); min-width: 130px; max-width: 170px; white-space: normal; font-weight: 600; font-size: 0.9rem; }
 .journal tbody th.jname { background: var(--surface); }
 .jlink { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; min-width: 64px; padding: 4px 6px; text-decoration: none; color: var(--text); }
-.jlink:hover { background: var(--primary-soft); }
 .jlink.late .jpct { color: var(--bad); }
 .jpct { font-weight: 700; }
 .jmarks { font-size: 0.9rem; line-height: 1.1; }
@@ -92,7 +96,6 @@ table.journal { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 /* очередь проверки */
 .review-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .review-item { display: grid; gap: 2px; min-height: 44px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; color: var(--text); box-shadow: var(--shadow); }
-.review-item:hover { border-color: var(--primary); }
 .review-sub { color: var(--text); }
 .review-meta { color: var(--muted); font-size: 0.9rem; }
 
@@ -103,7 +106,7 @@ table.journal { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .pending-note { color: var(--warn); font-weight: 600; }
 .work-task { overflow-wrap: anywhere; }
 .work-task-head { margin-bottom: 6px; }
-.work-answer { margin: 10px 0; padding: 10px; background: var(--surface-2); border-radius: 10px; overflow-x: auto; }
+.work-answer { margin: 10px 0; padding: 10px; background: var(--surface-2); border-radius: var(--radius); overflow-x: auto; }
 .work-answer textarea, .work-answer input { background: var(--surface); }
 .work-text { white-space: pre-wrap; }
 .auto-score { margin: 6px 0 0; font-weight: 600; }
@@ -165,3 +168,15 @@ table.journal { border-collapse: separate; border-spacing: 0; min-width: 100%; }
   .pcard-note { font-size: 9pt; }
 }
 .work-text-label { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+
+/* наведение — только там, где есть мышь: на телефоне :hover «залипает» после касания */
+@media (hover: hover) {
+  .admin-tab:hover { border-color: var(--primary); }
+  .rtable tbody tr:hover td { background: var(--surface-2); }
+  .jlink:hover { background: var(--primary-soft); }
+  .review-item:hover { border-color: var(--primary); background: var(--surface-2); }
+}
+/* на узком экране строки таблицы — карточки: подсветка ячеек при наведении не нужна */
+@media (hover: hover) and (max-width: 720px) {
+  .rtable tbody tr:hover td { background: transparent; }
+}

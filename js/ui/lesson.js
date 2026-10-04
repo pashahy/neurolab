@@ -76,10 +76,21 @@ export async function renderLesson(app, discipline, n) {
   const header = () => h('header', { class: 'lesson-head' },
     h('a', { href: back, class: 'back' }, preview ? '← Главная' : '← Карта курса'),
     h('div', { class: 'lesson-meta' }, `${preview ? 'Демо' : course.code} · ПЗ №${lesson.number} · Тема ${lesson.topic}`),
-    h('h1', {}, lesson.title));
+    h('h1', { class: 'display lesson-title' }, lesson.title));
+
+  // Раскладка шага занятия: aside — справочная колонка, main — текущий шаг.
+  // От 1100 px это две колонки (см. css/app.css), ниже — одна колонка в порядке aside → main.
+  // kind — стадия ('lecture', 'practice', …): от неё зависит, что прилипает и что скрыто на телефоне.
+  const grid = (kind, aside, main, asideLabel) => {
+    view.classList.add('split');
+    return h('div', { class: `lesson-grid ${kind}${aside ? '' : ' solo'}` },
+      aside ? h('aside', { class: 'lesson-aside', 'aria-label': asideLabel }, aside) : '',
+      h('section', { class: 'lesson-main' }, main));
+  };
 
   function show() {
     view.replaceChildren();
+    view.className = 'lesson';
     window.scrollTo(0, 0);
     ({ intro, lecture, task, finish }[draft.stage] || intro)();
   }
@@ -131,9 +142,33 @@ export async function renderLesson(app, discipline, n) {
     bodyEl = openModal('📚 Лекция', box);
   }
 
-  const tools = withLecture => h('div', { class: 'lesson-tools' },
+  // hasSheet: рядом есть шпаргалка — на широком экране она заменяет эти кнопки
+  const tools = (withLecture, hasSheet) => h('div', { class: `lesson-tools${hasSheet ? ' has-sheet' : ''}` },
     h('button', { class: 'btn small', type: 'button', onclick: openGlossary }, '📖 Термины'),
     withLecture ? h('button', { class: 'btn small', type: 'button', onclick: openLectureReader }, '📚 Лекция') : '');
+
+  // шпаргалка практики для широкого экрана: разделы лекции (раскрываются по нажатию) и словарь; у v1 — теория
+  function buildSheet() {
+    if (!v2) return lesson.theory ? [h('h2', { class: 'sheet-title' }, 'Шпаргалка'), h('div', { class: 'lecture-body', html: md(lesson.theory) })] : null;
+    const secs = Array.isArray(lesson.lecture) ? lesson.lecture : [];
+    const gl = sortedGlossary(lesson);
+    if (!secs.length && !gl.length) return null;
+    return [
+      h('h2', { class: 'sheet-title' }, 'Шпаргалка'),
+      secs.length ? h('div', { class: 'sheet-secs' }, secs.map((s, i) => h('details', { class: 'sheet-sec' },
+        h('summary', {}, h('span', { class: 'sheet-num', 'aria-hidden': 'true' }, String(i + 1)), h('span', { class: 'sheet-name' }, s.title)),
+        h('div', { class: 'lecture-body', html: md(s.body) })))) : '',
+      gl.length ? [h('h3', { class: 'sheet-sub' }, 'Термины'),
+        h('dl', { class: 'glossary' }, gl.flatMap(g => [h('dt', {}, g.term), h('dd', { html: mdInline(g.def) })]))] : '',
+    ];
+  }
+
+  // шпаргалку строим один раз: при переходе между заданиями раскрытые разделы остаются раскрытыми
+  let sheetCache;
+  const cheatSheet = () => {
+    if (sheetCache === undefined) { const c = buildSheet(); sheetCache = c ? h('div', { class: 'sheet' }, c) : null; }
+    return sheetCache;
+  };
 
   const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 
@@ -254,7 +289,7 @@ export async function renderLesson(app, discipline, n) {
       const feedback = h('div', { class: 'feedback', 'aria-live': 'polite' });
       const footer = h('div', { class: 'task-footer' });
       const card = h('div', { class: 'card lec-check' },
-        h('div', { class: 'task-title' }, h('span', {}, `Контрольный вопрос ${i + 1} из ${checks.length}`), h('span', { class: 'pts' }, `${t.points ?? 1} б.`)),
+        h('div', { class: 'task-title' }, h('span', {}, `Контрольный вопрос ${i + 1} из ${checks.length}`), h('span', { class: 'pill pts' }, `${t.points ?? 1} б.`)),
         h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer);
       checksBox.append(card);
       const ui = {
@@ -272,11 +307,14 @@ export async function renderLesson(app, discipline, n) {
     }
 
     add(view, header(), tools(false), progress,
-      h('div', { class: 'lec-step' }, `Раздел ${k + 1} из ${N} · ≈ ${minutes} мин`),
-      h('h2', { class: 'lec-title' }, s.title),
-      h('div', { class: 'lecture-body', html: md(s.body) }),
-      checks.length ? h('div', { class: 'lec-checks-head' }, h('h3', {}, '✅ Проверьте себя')) : '',
-      checksBox, nav);
+      grid('lecture', [
+        h('div', { class: 'lec-step' }, `Раздел ${k + 1} из ${N} · ≈ ${minutes} мин`),
+        h('h2', { class: 'lec-title' }, s.title),
+        h('div', { class: 'lecture-body', html: md(s.body) }),
+      ], [
+        checks.length ? h('div', { class: 'lec-checks-head' }, h('h3', {}, '✅ Проверьте себя')) : '',
+        checksBox, nav,
+      ], 'Текст раздела'));
     revealNext(false);
     refresh();
   }
@@ -294,12 +332,15 @@ export async function renderLesson(app, discipline, n) {
       ? h('details', { class: 'case card', open: lesson.tasks.findIndex(x => x.case === t.case) === draft.index },
         h('summary', {}, `Кейс: ${caseDef.title}`), h('div', { html: md(caseDef.text) }))
       : '';
-    add(view, header(), v2 ? tools(true) : '',
-      h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { class: 'bar', style: `width:${pct}%` })),
-      h('div', { class: 'task-title' }, h('span', {}, `${v2 ? 'Практика · задание' : 'Задание'} ${draft.index + 1} из ${total}`),
-        h('span', { class: 'pts' }, type.manual ? `${t.points ?? 1} б. · проверит преподаватель` : `${t.points ?? 1} б.`)),
-      caseBlock,
-      h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer);
+    const sheet = cheatSheet();
+    add(view, header(), v2 ? tools(true, !!sheet) : '',
+      grid('practice', sheet, [
+        h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Прогресс практики', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { class: 'bar', style: `width:${pct}%` })),
+        h('div', { class: 'task-title' }, h('span', {}, `${v2 ? 'Практика · задание' : 'Задание'} ${draft.index + 1} из ${total}`),
+          h('span', { class: 'pill pts' }, type.manual ? `${t.points ?? 1} б. · проверит преподаватель` : `${t.points ?? 1} б.`)),
+        caseBlock,
+        h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer,
+      ], 'Шпаргалка'));
 
     const next = () => {
       if (draft.index === total - 1) draft.stage = 'finish'; else draft.index++;

@@ -20,7 +20,7 @@ export function renderProfile(app) {
   const row = (k, v) => h('div', { class: 'kv' }, h('dt', {}, k), h('dd', {}, v || '—'));
   add(app.root,
     h('a', { href: '#/', class: 'back' }, '← Главная'),
-    h('h1', {}, 'Профиль'),
+    h('h1', { class: 'display' }, 'Профиль'),
     h('dl', { class: 'card profile' }, row('ФИО', p.name), row('Группа', p.group), row('Логин', p.login)),
     pending ? h('p', { class: 'hint' }, `⏳ Не отправлено работ: ${pending}.`) : '',
     exitBtn, confirmBox);
