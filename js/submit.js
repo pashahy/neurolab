@@ -1,7 +1,8 @@
 import { postJson } from './http.js';
 
-export function buildSubmission({ profile, discipline, lesson, answers, grade, texts, startedAt, now = Date.now(), rnd = Math.random }) {
-  return {
+// variant ('phone' | 'pc') — только у занятия с вариантами практики; без него поля в сдаче нет
+export function buildSubmission({ profile, discipline, lesson, answers, grade, texts, startedAt, variant, now = Date.now(), rnd = Math.random }) {
+  const sub = {
     id: `${now.toString(36)}-${Math.floor(rnd() * 1e9).toString(36)}`,
     studentId: profile.id,
     discipline,
@@ -16,6 +17,8 @@ export function buildSubmission({ profile, discipline, lesson, answers, grade, t
     answers,
     texts,
   };
+  if (variant) sub.variant = variant;
+  return sub;
 }
 
 export function createSubmitter({

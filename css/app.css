@@ -532,3 +532,29 @@ blockquote p { margin: 0.35rem 0; }
   .lesson-grid.practice > .lesson-aside { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px 16px 12px; }
   .lesson-grid.practice > .lesson-main > .progress:first-child { margin-top: 0; }
 }
+
+/* ---- выбор варианта практики: 📱 телефон / 💻 ПК (spec §5.3) ---- */
+.choose-title { margin-top: 12px; }
+.choose-lead { margin: 0 0 4px; }
+.variant-choice { display: grid; gap: 12px; margin: 14px 0 8px; }
+.variant-opt { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; padding: 16px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; transition: border-color 0.18s var(--ease), transform 0.15s var(--ease); }
+.variant-opt:active { transform: scale(0.99); }
+/* выбранный или предлагаемый вариант — рамка фирменным градиентом */
+.variant-opt.sel, .variant-opt.suggested { background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--grad) border-box; border: 2px solid transparent; padding: 15px; }
+.variant-ico { flex: none; width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-size: 24px; background: var(--surface-2); }
+.variant-opt.sel .variant-ico, .variant-opt.suggested .variant-ico { background: var(--grad); }
+.variant-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.variant-title { font-weight: 700; font-size: 1.05rem; }
+.variant-desc { color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+.variant-count { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.variant-tag { align-self: flex-start; margin-top: 6px; white-space: normal; }
+.variant-switch { font-size: 0.92rem; }
+@media (hover: hover) {
+  .variant-opt:hover { border-color: var(--primary); }
+  .variant-opt.sel:hover, .variant-opt.suggested:hover { border-color: transparent; }
+}
+@media (min-width: 1100px) {
+  .variant-choice { grid-template-columns: 1fr 1fr; }
+  .variant-opt { align-items: flex-start; }
+}
+.choose-back { margin-top: 8px; }

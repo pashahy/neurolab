@@ -2,7 +2,7 @@ import { h } from '../util/dom.js';
 import { md, round1 } from '../util/text.js';
 import { TASK_TYPES } from '../tasks/registry.js';
 import { loadLesson } from '../content.js';
-import { allTasks } from '../lesson-model.js';
+import { allTasks, hasVariants, inferVariant } from '../lesson-model.js';
 import { errText } from '../ui/login.js';
 import { discCode, select, fmtTime, hashQuery, loading, loadError, emptyBox } from './common.js';
 import { workHref } from './journal.js';
@@ -95,18 +95,21 @@ export async function renderWork(ctx, main) {
   const tasksBox = h('div', { class: 'work-tasks' });
   main.replaceChildren(head, chips, summary, tasksBox);
 
-  const tasks = allTasks(lesson);
-
   function draw() {
     const a = attempts[cur];
-    chips.replaceChildren(...attempts.map((x, i) => h('button', {
-      class: `btn small chip${i === cur ? ' primary' : ''}`, type: 'button', 'aria-pressed': String(i === cur),
-      onclick: () => { cur = i; draw(); },
-    }, `Попытка ${i + 1}`)));
     const data = a.data || {};
     const answers = data.answers && typeof data.answers === 'object' ? data.answers : {};
     const texts = data.texts && typeof data.texts === 'object' ? data.texts : {};
     const items = Array.isArray(data.items) ? data.items : [];
+    // задания того варианта, который сдал студент; у старой сдачи занятия с вариантами варианта нет — определяем по id заданий
+    // (у занятия без вариантов вся практика, как раньше)
+    const variant = a.variant === 'pc' || a.variant === 'phone' ? a.variant
+      : hasVariants(lesson) ? inferVariant(lesson, [...items.map(it => String(it.id)), ...Object.keys(answers)]) : undefined;
+    const tasks = allTasks(lesson, variant);
+    chips.replaceChildren(...attempts.map((x, i) => h('button', {
+      class: `btn small chip${i === cur ? ' primary' : ''}`, type: 'button', 'aria-pressed': String(i === cur),
+      onclick: () => { cur = i; draw(); },
+    }, `Попытка ${i + 1}`)));
     const itemOf = id => items.find(it => String(it.id) === String(id)) || null;
     const grades = a.grades && typeof a.grades === 'object' ? a.grades : (a.grades = {});
 
@@ -129,7 +132,8 @@ export async function renderWork(ctx, main) {
     };
     summary.replaceChildren(
       h('div', {}, `Попытка ${cur + 1} из ${attempts.length} · ${fmtTime(a.time)}${a.durationMin ? ` · ${a.durationMin} мин` : ''}`,
-        a.late ? h('span', { class: 'late-badge' }, '⏰ после срока') : ''),
+        a.late ? h('span', { class: 'late-badge' }, '⏰ после срока') : '',
+        variant ? h('span', { class: 'variant-badge' }, variant === 'pc' ? ' · 💻 ПК-вариант' : ' · 📱 телефон') : ''),
       h('div', {}, `Автобаллы: ${a.score} из ${a.max}`),
       totalLine);
     redrawTotal();

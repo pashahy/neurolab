@@ -50,14 +50,14 @@ export async function renderJournal(ctx, main) {
     const c = own(d.cells, s.id) && own(d.cells[s.id], n) ? d.cells[s.id][n] : null;
     if (!c) return h('td', { class: 'jcell empty' }, h('span', { class: 'jdash', 'aria-label': 'не сдано' }, '–'));
     const pct = c.max > 0 ? `${Math.round(c.best / c.max * 100)}%` : '—';
-    const marks = [c.manual === 'pending' ? '⏳' : '', c.manual === 'graded' ? '💬' : '', c.late ? '⏰' : ''].filter(Boolean).join('');
-    const note = [`автобалл ${c.best} из ${c.max}`, c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', `попыток: ${c.attempts}`].filter(Boolean).join(', ');
+    const marks = [c.manual === 'pending' ? '⏳' : '', c.manual === 'graded' ? '💬' : '', c.late ? '⏰' : '', c.variant === 'pc' ? '💻' : ''].filter(Boolean).join('');
+    const note = [`автобалл ${c.best} из ${c.max}`, c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`].filter(Boolean).join(', ');
     return h('td', { class: 'jcell' }, h('a', { class: `jlink${c.late ? ' late' : ''}`, href: workHref(s.id, disc, n), title: note, 'aria-label': `${s.name}, ПЗ ${n}: ${note}` },
       h('span', { class: 'jpct' }, pct), marks ? h('span', { class: 'jmarks', 'aria-hidden': 'true' }, marks) : ''));
   };
 
   body.replaceChildren(
-    h('p', { class: 'hint' }, '% — лучший автоматический балл; ⏳ ждёт ручной проверки; 💬 оценено преподавателем; ⏰ сдано после срока. Нажмите на ячейку — откроется работа.'),
+    h('p', { class: 'hint' }, '% — лучший автоматический балл; ⏳ ждёт ручной проверки; 💬 оценено преподавателем; ⏰ сдано после срока; 💻 сдано в ПК-варианте. Нажмите на ячейку — откроется работа.'),
     h('div', { class: 'journal-wrap', tabindex: '0', role: 'region', 'aria-label': 'Журнал: прокручивается по горизонтали' },
       h('table', { class: 'journal' },
         h('thead', {}, h('tr', {}, h('th', { class: 'jname' }, 'Студент'), lessons.map(n => h('th', { class: 'jh' }, `ПЗ ${n}`)))),

@@ -1,8 +1,8 @@
 import { h, add, celebrate } from '../util/dom.js';
 import { md, mdInline } from '../util/text.js';
 import { TASK_TYPES } from '../tasks/registry.js';
-import { gradeLesson, lessonTexts } from '../grading.js';
-import { isV2, allTasks, wordCount, readMinutes, sortedGlossary } from '../lesson-model.js';
+import { submissionParts } from '../grading.js';
+import { isV2, allTasks, hasVariants, practiceTasks, wordCount, readMinutes, sortedGlossary } from '../lesson-model.js';
 import { loadCourse, loadLesson, isLessonOpen, courseAccess, deadlineInfo, teacherGrade } from '../content.js';
 import { lessonKey } from '../store.js';
 import { identityChanged } from '../nav.js';
@@ -70,8 +70,14 @@ export async function renderLesson(app, discipline, n) {
   app.root.replaceChildren(view);
   const who = CHARACTERS[lesson.story.from];
   const v2 = isV2(lesson);
-  const all = allTasks(lesson);
-  const total = lesson.tasks.length;
+  // занятие с вариантами практики (📱 телефон / 💻 ПК): после лекции студент выбирает вариант (стадия 'choose')
+  const withVariants = v2 && hasVariants(lesson);
+  // задания практики выбранного варианта (у занятия без вариантов — вся практика)
+  const practice = () => practiceTasks(lesson, draft.variant);
+  const VARIANTS = {
+    phone: { icon: '📱', title: 'С телефона', desc: 'Всё прямо на сайте, с любого устройства.', short: 'с телефона' },
+    pc: { icon: '💻', title: 'За компьютером', desc: 'Работа в программах: код, нейросети, файлы.', short: 'за компьютером' },
+  };
 
   const header = () => h('header', { class: 'lesson-head' },
     h('a', { href: back, class: 'back' }, preview ? '← Главная' : '← Карта курса'),
@@ -92,7 +98,9 @@ export async function renderLesson(app, discipline, n) {
     view.replaceChildren();
     view.className = 'lesson';
     window.scrollTo(0, 0);
-    ({ intro, lecture, task, finish }[draft.stage] || intro)();
+    // практика без выбранного варианта невозможна — сначала выбор
+    if (withVariants && !draft.variant && (draft.stage === 'task' || draft.stage === 'finish')) draft.stage = 'choose';
+    ({ intro, lecture, choose, task, finish }[draft.stage] || intro)();
   }
 
   // ---------- окно поверх занятия (словарь, чтение лекции) ----------
@@ -171,6 +179,9 @@ export async function renderLesson(app, discipline, n) {
   };
 
   const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
+  const tasksLabel = v => { const c = practiceTasks(lesson, v).length; return `${c} ${plural(c, 'задание', 'задания', 'заданий')}`; };
+  // куда ведёт «К практике»: у занятия с вариантами без выбранного варианта — на экран выбора
+  const practiceStage = () => (withVariants && !draft.variant ? 'choose' : 'task');
 
   function intro() {
     if (v2) {
@@ -181,7 +192,9 @@ export async function renderLesson(app, discipline, n) {
           h('div', { class: 'bubble' }, h('div', { class: 'who' }, `${who.name}, ${who.role}`), h('div', { html: md(lesson.story.text) }))),
         h('div', { class: 'card' },
           h('p', {}, `📘 Лекция: ${secs.length} ${plural(secs.length, 'раздел', 'раздела', 'разделов')}, примерно ${m.theory ?? 25} минут. После каждого раздела — контрольные вопросы.`),
-          h('p', {}, `🛠 Практика: ${total} заданий, примерно ${m.practice ?? 50} минут.`)),
+          withVariants
+            ? h('p', {}, `🛠 Практика: примерно ${m.practice ?? 50} минут, на выбор ${VARIANTS.phone.short} (${tasksLabel('phone')}) или ${VARIANTS.pc.short} (${tasksLabel('pc')}).`)
+            : h('p', {}, `🛠 Практика: ${lesson.tasks.length} заданий, примерно ${m.practice ?? 50} минут.`)),
         deadlineNote(),
         h('button', { class: 'btn primary big', type: 'button', onclick: () => { draft.stage = 'lecture'; save(); show(); } }, 'Начать лекцию →'));
       return;
@@ -190,7 +203,7 @@ export async function renderLesson(app, discipline, n) {
       h('div', { class: 'story' }, h('div', { class: 'avatar', 'aria-hidden': 'true' }, who.avatar),
         h('div', { class: 'bubble' }, h('div', { class: 'who' }, `${who.name}, ${who.role}`), h('div', { html: md(lesson.story.text) }))),
       h('details', { class: 'theory card', open: true }, h('summary', {}, '📘 Шпаргалка'), h('div', { html: md(lesson.theory) })),
-      h('p', { class: 'hint' }, `Заданий: ${total} · примерно ${lesson.minutes ?? 35} минут`),
+      h('p', { class: 'hint' }, `Заданий: ${lesson.tasks.length} · примерно ${lesson.minutes ?? 35} минут`),
       deadlineNote(),
       h('button', { class: 'btn primary big', type: 'button', onclick: () => { draft.stage = 'task'; save(); show(); } }, 'Начать →'));
   }
@@ -259,7 +272,7 @@ export async function renderLesson(app, discipline, n) {
   function lecture() {
     const secs = lesson.lecture;
     const N = secs.length;
-    if (!N) { draft.stage = 'task'; save(); task(); return; }
+    if (!N) { draft.stage = practiceStage(); save(); show(); return; }
     const k = draft.section;
     const s = secs[k];
     const checks = Array.isArray(s.check) ? s.check : [];
@@ -280,7 +293,7 @@ export async function renderLesson(app, discipline, n) {
         allDone() ? '' : h('p', { class: 'hint' }, 'Ответьте на контрольные вопросы или пропустите их — тогда можно идти дальше.'));
     };
     const go = i => { draft.section = i; save(); show(); };
-    const toPractice = () => { draft.stage = 'task'; save(); show(); };
+    const toPractice = () => { draft.stage = practiceStage(); save(); show(); };
 
     let shown = 0;
     function mountCard(i) {
@@ -319,8 +332,70 @@ export async function renderLesson(app, discipline, n) {
     refresh();
   }
 
+  // ---------- выбор варианта практики (занятие с вариантами) ----------
+  let chooseFrom = null; // этап и задание, с которых открыли «Сменить вариант»
+  function choose() {
+    // на широком экране предлагаем 💻, но выбирает студент
+    const wide = typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1100px)').matches;
+    const pick = v => {
+      draft.variant = v;
+      // к первому незакрытому заданию варианта (ответы на общие задания сохраняются);
+      // если закрыты все задания варианта — сразу к итогам
+      const first = practiceTasks(lesson, v).findIndex(t => !draft.locked[t.id]);
+      draft.index = first >= 0 ? first : 0;
+      draft.stage = first >= 0 ? 'task' : 'finish';
+      chooseFrom = null;
+      save();
+      show();
+    };
+    const opt = v => {
+      const o = VARIANTS[v];
+      const sel = draft.variant === v;
+      const suggested = !draft.variant && wide && v === 'pc';
+      return h('button', {
+        type: 'button', class: `variant-opt${sel ? ' sel' : ''}${suggested ? ' suggested' : ''}`, 'aria-pressed': String(sel), onclick: () => pick(v),
+      },
+      h('span', { class: 'variant-ico', 'aria-hidden': 'true' }, o.icon),
+      h('span', { class: 'variant-txt' },
+        h('span', { class: 'variant-title' }, o.title),
+        h('span', { class: 'variant-desc' }, o.desc),
+        h('span', { class: 'variant-count' }, tasksLabel(v)),
+        sel ? h('span', { class: 'pill variant-tag' }, 'Текущий вариант') : suggested ? h('span', { class: 'pill variant-tag' }, 'Удобно на компьютере') : ''));
+    };
+    // «← Вернуться» — только когда вариант уже выбран (экран открыт через «Сменить вариант»): ничего не меняет
+    const backBtn = draft.variant ? h('button', { class: 'btn ghost big choose-back', type: 'button', onclick: () => {
+      const from = chooseFrom || (practice().every(t => draft.locked[t.id]) ? { stage: 'finish', index: 0 } : { stage: 'task', index: Math.max(0, practice().findIndex(t => !draft.locked[t.id])) });
+      chooseFrom = null;
+      draft.stage = from.stage;
+      draft.index = from.index;
+      save();
+      show();
+    } }, '← Вернуться') : '';
+    add(view, header(), tools(true),
+      grid('choose', null, [
+        h('h2', { class: 'choose-title' }, 'Как вы выполняете практику?'),
+        h('p', { class: 'muted choose-lead' }, draft.variant
+          ? 'Ответы на общие задания сохранятся. Задания другого варианта в сдачу не попадут.'
+          : 'Лекция пройдена. Выберите, где удобнее работать: вариант можно сменить, пока работа не сдана.'),
+        h('div', { class: 'variant-choice', role: 'group', 'aria-label': 'Вариант практики' }, opt('phone'), opt('pc')),
+        deadlineNote(),
+        backBtn,
+      ]));
+  }
+
+  // ссылка «Сменить вариант» под заданием и на итогах (пока работа не сдана)
+  const switchVariant = () => (withVariants && draft.variant ? h('button', { class: 'link-btn variant-switch', type: 'button', onclick: () => {
+    if (!confirm('Сменить вариант? Ответы на общие задания сохранятся.')) return;
+    chooseFrom = { stage: draft.stage, index: draft.index }; // куда вернёт «← Вернуться»
+    draft.stage = 'choose';
+    save();
+    show();
+  } }, `Сменить вариант (сейчас: ${VARIANTS[draft.variant].icon} ${VARIANTS[draft.variant].short})`) : '');
+
   function task() {
-    const t = lesson.tasks[draft.index];
+    const tasks = practice();
+    const total = tasks.length;
+    const t = tasks[draft.index];
     const type = TASK_TYPES[t.type];
     const body = h('div', { class: 'task-body' });
     const feedback = h('div', { class: 'feedback', 'aria-live': 'polite' });
@@ -329,7 +404,7 @@ export async function renderLesson(app, discipline, n) {
     const caseDef = t.case && Array.isArray(lesson.cases) ? lesson.cases.find(c => c && c.id === t.case) : null;
     // кейс раскрыт у первого задания кейса и свёрнут у следующих
     const caseBlock = caseDef
-      ? h('details', { class: 'case card', open: lesson.tasks.findIndex(x => x.case === t.case) === draft.index },
+      ? h('details', { class: 'case card', open: tasks.findIndex(x => x.case === t.case) === draft.index },
         h('summary', {}, `Кейс: ${caseDef.title}`), h('div', { html: md(caseDef.text) }))
       : '';
     const sheet = cheatSheet();
@@ -337,9 +412,9 @@ export async function renderLesson(app, discipline, n) {
       grid('practice', sheet, [
         h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Прогресс практики', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { class: 'bar', style: `width:${pct}%` })),
         h('div', { class: 'task-title' }, h('span', {}, `${v2 ? 'Практика · задание' : 'Задание'} ${draft.index + 1} из ${total}`),
-          h('span', { class: 'pill pts' }, type.manual ? `${t.points ?? 1} б. · проверит преподаватель` : `${t.points ?? 1} б.`)),
+          h('span', { class: 'pill pts' }, `${t.variant === 'pc' ? '💻 ПК-задание · ' : ''}${type.manual ? `${t.points ?? 1} б. · проверит преподаватель` : `${t.points ?? 1} б.`}`)),
         caseBlock,
-        h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer,
+        h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer, switchVariant(),
       ], 'Шпаргалка'));
 
     const next = () => {
@@ -354,11 +429,13 @@ export async function renderLesson(app, discipline, n) {
   }
 
   function finish() {
-    const grade = gradeLesson(lesson, draft.answers);
+    const { grade, answers: subAnswers, texts: subTexts } = submissionParts(lesson, draft);
+    const all = allTasks(lesson, draft.variant);
     const errLine = h('p', { class: 'error', role: 'alert' });
     const submitBtn = h('button', { class: 'btn primary big', type: 'button', onclick: submitNow }, preview ? 'Завершить демо' : '📤 Сдать работу');
     add(view, header(),
       h('div', { class: 'card result' },
+        withVariants ? h('span', { class: 'pill' }, `${VARIANTS[draft.variant].icon} Вариант: ${VARIANTS[draft.variant].short}`) : '',
         h('div', { class: 'big-score' }, `${grade.score} / ${grade.max}`),
         h('p', { class: 'muted' }, 'баллов по автопроверке'),
         grade.manualMax ? h('p', { class: 'hint' }, `+ до ${grade.manualMax} б. после проверки преподавателем`) : '',
@@ -370,7 +447,8 @@ export async function renderLesson(app, discipline, n) {
         }))),
       deadlineNote(),
       submitBtn, errLine,
-      h('button', { class: 'btn ghost big', type: 'button', onclick: () => { draft.stage = 'task'; draft.index = 0; save(); show(); } }, '↩ Просмотреть задания'));
+      h('button', { class: 'btn ghost big', type: 'button', onclick: () => { draft.stage = 'task'; draft.index = 0; save(); show(); } }, '↩ Просмотреть задания'),
+      switchVariant());
 
     async function submitNow() {
       submitBtn.disabled = true;
@@ -384,7 +462,10 @@ export async function renderLesson(app, discipline, n) {
       }
       let sub, gain, badges, levelUp;
       try {
-        sub = buildSubmission({ profile: app.store.profile(), discipline, lesson, answers: draft.answers, grade, texts: lessonTexts(lesson, draft.answers), startedAt: draft.startedAt });
+        sub = buildSubmission({
+          profile: app.store.profile(), discipline, lesson, grade, startedAt: draft.startedAt, variant: draft.variant,
+          answers: subAnswers, texts: subTexts,
+        });
         gain = xpGain(app.store.progress(key), grade);
         const before = levelFor(app.store.state().xp);
         app.store.recordResult(key, { score: grade.score, max: grade.max, at: new Date().toISOString() });
