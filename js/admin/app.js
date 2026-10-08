@@ -7,6 +7,7 @@ import { renderJournal } from './journal.js';
 import { renderReview, renderWork } from './review.js';
 import { renderAccess } from './access.js';
 import { renderStats } from './stats.js';
+import { renderSettings } from './settings.js';
 
 const TABS = [
   { id: 'students', label: 'Студенты', render: renderStudents },
@@ -14,10 +15,11 @@ const TABS = [
   { id: 'review', label: 'Проверка', render: renderReview },
   { id: 'access', label: 'Доступ', render: renderAccess },
   { id: 'stats', label: 'Статистика', render: renderStats },
+  { id: 'settings', label: 'Настройки', render: renderSettings },
 ];
 const ADMIN_PASSWORD_MIN = 10;
 
-// Админ-панель: #/admin, #/admin/students|journal|review|access|stats, #/admin/cards, #/admin/work.
+// Админ-панель: #/admin, #/admin/students|journal|review|access|stats|settings, #/admin/cards, #/admin/work.
 // Не требует студенческой сессии; пароль администратора нигде не сохраняется, хранится только токен.
 export function renderAdmin(app, parts, query) {
   const my = app.routeId;
@@ -31,9 +33,11 @@ export function renderAdmin(app, parts, query) {
   const ctx = {
     app, query, alive,
     // запрос от имени администратора; при {auth:true} токен стирается и открывается форма входа
-    async call(action, body) {
+    call: (action, body) => ctx.guard(() => app.api.admin(action, body || {})),
+    // то же для готовых методов api (api.adminFileUrl и т. п.): job() -> Promise
+    async guard(job) {
       try {
-        return await app.api.admin(action, body || {});
+        return await job();
       } catch (e) {
         if (e && e.auth) {
           app.store.clearAdminToken();

@@ -3,6 +3,7 @@ import { levelFor, BADGES } from '../gamification.js';
 import { loadCourse, flatLessons, courseAccess, deadlineInfo } from '../content.js';
 import { DISCIPLINES } from '../config.js';
 import { lessonKey } from '../store.js';
+import { LIMIT_TEXT, holdText } from '../submit.js';
 import { coursePath, doneStreak, routeStop, pathInputs, progressCount } from './course-path.js';
 
 const plural = (n, [one, few, many]) => {
@@ -33,9 +34,12 @@ export async function renderHome(app) {
         streak),
       h('section', { class: 'home-courses', 'aria-labelledby': 'my-courses' },
         h('h2', { class: 'sec-title', id: 'my-courses' }, 'Мои курсы'),
-        pending ? h('div', { class: 'card warn' },
+        pending && app.submitter.limited() ? h('div', { class: 'card warn' },
+          h('p', {}, `⏳ Не отправлено работ: ${pending}. ${LIMIT_TEXT}.`)) : '',
+        pending && !app.submitter.limited() ? h('div', { class: 'card warn' },
           h('p', {}, `⏳ Не отправлено работ: ${pending}. Они уйдут автоматически, когда появится интернет.`),
-          h('button', { class: 'btn small', type: 'button', onclick: async e => { e.target.disabled = true; await app.submitter.flush(); app.rerender(); } }, 'Отправить сейчас')) : '',
+          app.submitter.held().map(reason => h('p', { class: 'hint' }, `${holdText(reason)}.`)),
+          h('button', { class: 'btn small', type: 'button', onclick: async e => { e.target.disabled = true; await app.submitter.flush({ manual: true }); app.rerender(); } }, 'Отправить сейчас')) : '',
         courses)),
     h('section', { class: 'home-paths', 'aria-labelledby': 'course-path' },
       h('h2', { class: 'sec-title', id: 'course-path' }, 'Путь курса'),

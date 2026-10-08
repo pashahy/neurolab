@@ -1,3 +1,5 @@
+import { newBadges } from './gamification.js';
+
 const KEY = 'neurolab.v1';
 
 export const lessonKey = (d, n) => `${d}/${n}`;
@@ -31,6 +33,31 @@ function sanitizeBucket(raw) {
   if (Number.isFinite(raw.xp)) out.xp = raw.xp;
   for (const k of ['badges', 'days']) if (Array.isArray(raw[k])) out[k] = raw[k];
   return out;
+}
+
+// Ответ сервера myProgress -> проверенные поля или null (не тот ответ). Записи с неверным ключом или баллами
+// отбрасываются; perfectTypes — объединение по всем ПЗ (для значков за типы заданий).
+const PROGRESS_KEY = /^[a-z0-9]+\/\d{1,3}$/;
+const timeOf = v => { const t = typeof v === 'string' ? Date.parse(v) : NaN; return isNaN(t) ? null : t; };
+function cleanServerProgress(data) {
+  if (!isObj(data) || data.ok !== true || !isObj(data.progress)) return null;
+  const progress = {};
+  const perfectTypes = [];
+  Object.keys(data.progress).forEach(k => {
+    const p = data.progress[k];
+    if (!PROGRESS_KEY.test(k) || !isObj(p) || !Number.isFinite(p.best) || !Number.isFinite(p.max)) return;
+    progress[k] = {
+      best: p.best, max: p.max, attempts: Number.isFinite(p.attempts) ? p.attempts : 0,
+      perfect: p.perfect === true, at: timeOf(p.lastAt) === null ? null : p.lastAt,
+    };
+    if (Array.isArray(p.perfectTypes)) p.perfectTypes.forEach(t => { if (isStr(t) && !perfectTypes.includes(t)) perfectTypes.push(t); });
+  });
+  return {
+    progress,
+    xp: Number.isFinite(data.xp) && data.xp > 0 ? data.xp : 0,
+    days: Array.isArray(data.days) ? data.days.filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [],
+    perfectTypes,
+  };
 }
 
 function sanitizeStudent(s) {
@@ -158,6 +185,41 @@ export function createStore(storage = safeLocalStorage()) {
       touch();
       save();
       return b.progress[key];
+    },
+    // Слияние прогресса с сервера (другое устройство) с локальным; true — что-то изменилось.
+    // forStudentId — для кого запрашивали: ответ сливается, только если и запрос, и ответ — для текущего студента.
+    // По ПЗ: лучший балл и число попыток — больше из двух, perfect — у любого, max — с сервера, время — позднее;
+    // ПЗ, которых нет на сервере (офлайн-очередь), остаются. Дни — объединение, XP — больший (локальный может быть
+    // впереди только из-за очереди). Значки: прежние + те, что открывает объединённое состояние.
+    mergeServerProgress(data, forStudentId) {
+      const id = studentId();
+      if (id === null || !isStr(forStudentId) || forStudentId !== id || !isObj(data) || data.studentId !== id) return false;
+      const srv = cleanServerProgress(data);
+      if (!srv) return false;
+      const b = bucket();
+      const before = JSON.stringify([b.progress, b.xp, b.badges, b.days]);
+      Object.keys(srv.progress).forEach(k => {
+        const sp = srv.progress[k];
+        const lp = own(b.progress, k) && isObj(b.progress[k]) ? b.progress[k] : null;
+        if (!lp) { b.progress[k] = sp; return; }
+        const la = timeOf(lp.at);
+        const sa = timeOf(sp.at);
+        b.progress[k] = {
+          best: Math.max(Number.isFinite(lp.best) ? lp.best : 0, sp.best),
+          max: sp.max,
+          attempts: Math.max(Number.isFinite(lp.attempts) ? lp.attempts : 0, sp.attempts),
+          perfect: !!lp.perfect || sp.perfect,
+          at: sa !== null && (la === null || sa > la) ? sp.at : lp.at,
+        };
+      });
+      const extraDays = srv.days.filter((d, i) => !b.days.includes(d) && srv.days.indexOf(d) === i);
+      if (extraDays.length) b.days = b.days.concat(extraDays).sort();
+      b.xp = Math.max(b.xp, srv.xp);
+      const fresh = newBadges(b, { perfectTypes: srv.perfectTypes });
+      if (fresh.length) b.badges = b.badges.concat(fresh);
+      const changed = JSON.stringify([b.progress, b.xp, b.badges, b.days]) !== before;
+      if (changed) { touch(); save(); }
+      return changed;
     },
     addXp(n) { const b = bucket(); b.xp += n; touch(); save(); return b.xp; },
     addBadges(ids) {

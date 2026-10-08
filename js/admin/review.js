@@ -11,8 +11,54 @@ const own = (o, k) => o != null && typeof o === 'object' && Object.prototype.has
 const TYPE_LABEL = {
   single: 'Один ответ', multi: 'Несколько ответов', fill: 'Пропуски', swipe: 'Да/нет', order: 'Порядок', match: 'Соответствие',
   categorize: 'Категории', hotspot: 'Поиск ошибки', 'prompt-builder': 'Конструктор запроса', dilemma: 'Дилемма',
-  text: 'Развёрнутый ответ', terminal: 'Терминал', python: 'Python', numeric: 'Число',
+  text: 'Развёрнутый ответ', terminal: 'Терминал', python: 'Python', numeric: 'Число', file: 'Файл',
 };
+
+// ---------- файлы студентов ----------
+
+const kb = size => Math.max(1, Math.ceil((Number(size) || 0) / 1024));
+const FILE_REJECTED_TEXT = 'Файл не принят: ссылка не из папки студента';
+const FILE_ERRORS = { 'storage off': 'Хранилище файлов не подключено — см. вкладку «Настройки»', 'bad key': 'Неверная ссылка на файл' };
+
+// Ответ задания file: {key, name, size, …} или пометка сервера {fileRejected: true}. Смотрим только
+// верхний уровень ответа (answers[id].key), вложенные поля не читаем.
+export function fileAnswer(a) {
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return null;
+  return a.fileRejected === true || typeof a.key === 'string' ? a : null;
+}
+
+// «📎 имя (КБ)» и кнопка «Открыть файл»: подписанная ссылка на 15 минут (adminFileUrl) открывается в новой вкладке.
+// Отклонённый сервером файл — предупреждение без кнопки. a: {key, name, size} или {fileRejected | rejected: true}.
+export function fileRow(ctx, a) {
+  if (a.fileRejected === true || a.rejected === true || typeof a.key !== 'string' || !a.key) {
+    return h('p', { class: 'file-rejected' }, `⚠️ ${FILE_REJECTED_TEXT}`);
+  }
+  const err = h('p', { class: 'error', role: 'alert' });
+  const link = h('p', { class: 'hint file-link', role: 'status' });
+  const btn = h('button', { class: 'btn small primary', type: 'button' }, 'Открыть файл');
+  btn.addEventListener('click', async () => {
+    err.textContent = '';
+    link.replaceChildren();
+    btn.disabled = true;
+    btn.textContent = 'Открываем…';
+    try {
+      const r = await ctx.guard(() => ctx.app.api.adminFileUrl({ key: a.key }));
+      if (!ctx.alive()) return;
+      window.open(r.url, '_blank', 'noopener');
+      // браузер мог заблокировать окно, открытое после запроса (Safari на iPhone): даём обычную ссылку
+      link.replaceChildren('Если вкладка не открылась, ', h('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'откройте файл по ссылке'), ' (действует 15 минут).');
+    } catch (e) {
+      if (!ctx.alive() || (e && e.handled)) return;
+      err.textContent = e && !e.network && FILE_ERRORS[e.message] ? FILE_ERRORS[e.message] : errText(e);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Открыть файл';
+    }
+  });
+  return h('div', { class: 'file-row' },
+    h('div', { class: 'file-line' }, h('span', { class: 'file-label' }, `📎 ${a.name || 'файл'} (${kb(a.size)} КБ)`), btn),
+    err, link);
+}
 
 // ---------- очередь «Проверка» ----------
 
@@ -42,11 +88,16 @@ export async function renderReview(ctx, main) {
   const queue = Array.isArray(d.queue) ? d.queue : [];
   bar.querySelector('#review-count').textContent = `Ждут проверки: ${queue.length}`;
   if (!queue.length) { body.replaceChildren(emptyBox('✅ Всё проверено: развёрнутых ответов без оценки нет.')); return; }
-  body.replaceChildren(h('ul', { class: 'review-list' }, queue.map(q => h('li', {},
-    h('a', { class: 'review-item', href: workHref(q.studentId, q.discipline, q.lesson, { a: q.submissionId, from: 'review' }) },
-      h('span', { class: 'review-main' }, h('strong', {}, q.name), h('span', { class: 'muted' }, ` · ${q.group}`)),
-      h('span', { class: 'review-sub' }, `${discCode(q.discipline)} · ПЗ ${q.lesson}${q.title ? `. ${q.title}` : ''}`),
-      h('span', { class: 'review-meta' }, `${fmtTime(q.time)} · заданий к проверке: ${Array.isArray(q.tasks) ? q.tasks.length : 0}`))))));
+  // файлы — отдельным блоком под ссылкой: кнопка внутри ссылки была бы вложенным интерактивным элементом
+  body.replaceChildren(h('ul', { class: 'review-list' }, queue.map(q => {
+    const files = Array.isArray(q.files) ? q.files.filter(f => f && typeof f === 'object') : [];
+    return h('li', { class: 'review-entry' },
+      h('a', { class: `review-item${files.length ? ' with-files' : ''}`, href: workHref(q.studentId, q.discipline, q.lesson, { a: q.submissionId, from: 'review' }) },
+        h('span', { class: 'review-main' }, h('strong', {}, q.name), h('span', { class: 'muted' }, ` · ${q.group}`)),
+        h('span', { class: 'review-sub' }, `${discCode(q.discipline)} · ПЗ ${q.lesson}${q.title ? `. ${q.title}` : ''}`),
+        h('span', { class: 'review-meta' }, `${fmtTime(q.time)} · заданий к проверке: ${Array.isArray(q.tasks) ? q.tasks.length : 0}`)),
+      files.length ? h('div', { class: 'review-files' }, files.map(f => fileRow(ctx, f))) : '');
+  })));
 }
 
 // ---------- карточка работы ----------
@@ -146,7 +197,16 @@ export async function renderWork(ctx, main) {
       const art = h('article', { class: 'work-task card', 'data-task': t.id });
       const answerBox = h('div', { class: 'work-answer' });
       const raw = own(answers, t.id) ? answers[t.id] : undefined;
+      // файл: у задания file, у задания без файла занятия и у любой пометки сервера «файл не принят»
+      const fa = fileAnswer(raw);
+      const asFile = !!fa && (t.type === 'file' || !ty || !!t._bare || fa.fileRejected === true);
       if (raw === null) answerBox.append(h('p', { class: 'muted' }, 'Задание пропущено.'));
+      else if (asFile) {
+        if (!t._bare && Array.isArray(t.rubric) && t.rubric.length) {
+          answerBox.append(h('div', { class: 'rubric' }, h('strong', {}, 'Критерии оценки:'), h('ul', {}, t.rubric.map(r => h('li', {}, String(r))))));
+        }
+        answerBox.append(fileRow(ctx, fa));
+      }
       else if (raw === undefined) {
         if (own(texts, t.id)) answerBox.append(h('pre', { class: 'work-text' }, String(texts[t.id])));
         else answerBox.append(h('p', { class: 'muted' }, 'Ответа нет в данных сдачи.'));
@@ -160,7 +220,7 @@ export async function renderWork(ctx, main) {
       else answerBox.append(h('pre', { class: 'work-text' }, JSON.stringify(raw, null, 1)));
 
       // текст развёрнутого ответа (для дилеммы — «Выборы… Обоснование…») показываем и под заданием
-      if (manual && raw !== undefined && raw !== null && ty && !t._bare && own(texts, t.id)) {
+      if (manual && !asFile && raw !== undefined && raw !== null && ty && !t._bare && own(texts, t.id)) {
         answerBox.append(h('div', { class: 'work-text-label' }, 'Текст ответа:'), h('pre', { class: 'work-text' }, String(texts[t.id])));
       }
 

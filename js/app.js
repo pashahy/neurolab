@@ -1,6 +1,7 @@
 import { createStore } from './store.js';
 import { createSubmitter } from './submit.js';
 import { createApi } from './api.js';
+import { createProgressSync } from './progress-sync.js';
 import { API_URL } from './config.js';
 import { h } from './util/dom.js';
 import { safeNext, expiryNext, identityChanged } from './nav.js';
@@ -31,6 +32,8 @@ const app = {
   submittedKey: null, // ключ занятия, работа по которому только что сдана (для возврата после истечения сессии)
 };
 app.submitter = createSubmitter({ store, url: API_URL, onAuthRequired: () => app.authExpired() });
+// прогресс с сервера (другие устройства): при входе и на главной и карте курса, не чаще раза в 2 минуты на студента
+app.syncProgress = createProgressSync({ api: app.api, store, onAuth: () => app.authExpired() });
 
 const currentPath = () => (location.hash.replace(/^#/, '') || '/').split('?')[0];
 
@@ -93,14 +96,22 @@ app.ensureAccess = async function ensureAccess({ maxWaitMs = 0 } = {}) {
 app.finishLogin = async function finishLogin(r, next) {
   store.setSession({ token: r.token, student: r.student });
   app.flash = '';
-  // ждём me не дольше LOGIN_WAIT_MS, потом открываем экран; обновление продолжается в фоне
-  await Promise.race([app.refreshAccount({ force: true }), delay(LOGIN_WAIT_MS)]);
+  // ждём me не дольше LOGIN_WAIT_MS, потом открываем экран; обновление продолжается в фоне.
+  // Прогресс с сервера — сразу после входа, без паузы syncProgress.
+  let synced = false;
+  const prog = app.syncProgress({ force: true });
+  prog.then(() => { synced = true; });
+  await Promise.race([Promise.all([app.refreshAccount({ force: true }), prog]), delay(LOGIN_WAIT_MS)]);
+  // прогресс не успел к открытию экрана — первый экран после входа перерисуется один раз, когда он придёт (route)
+  loginSync = synced ? null : { promise: prog, token: r.token };
   flushUI();
   app.go(safeNext(next));
 };
+let loginSync = null; // { promise, token } — синхронизация прогресса при входе, ещё не дошедшая до экрана
 
 app.logout = function logout() {
   app.api.logout().catch(() => {}); // токен подставляется сразу; без сети выходим локально
+  loginSync = null;
   store.clearSession(); // очередь неотправленных работ остаётся — её отправит вход того же студента
   app.flash = '';
   app.go('/login');
@@ -125,14 +136,23 @@ function flushUI() {
   });
 }
 
-// обновление данных на экранах, где доступ и оценки видны сразу; занятие в процессе не перерисовываем
+// обновление данных на экранах, где доступ и оценки видны сразу; занятие в процессе не перерисовываем.
+// На главной и карте курса — ещё и прогресс с сервера (syncProgress сам ограничивает частоту).
 function softRefresh(id, { force = false } = {}) {
-  app.refreshAccount({ force }).then(changed => {
-    if (!changed || app.routeId !== id) return;
-    const [a, , c] = currentPath().split('/').filter(Boolean);
-    if (isDemo(a) || a === 'login' || a === 'admin' || (a === 'd' && c)) return;
-    route();
+  const [a0, b0, c0] = currentPath().split('/').filter(Boolean);
+  const withProgress = !a0 || (a0 === 'd' && !!b0 && !c0);
+  Promise.all([app.refreshAccount({ force }), withProgress ? app.syncProgress() : false]).then(([acc, prog]) => {
+    if (acc || prog) rerenderIfStill(id);
   });
+}
+
+// Перерисовка экрана id после фонового обновления: только если он ещё открыт (второй вызов для того же экрана
+// уже ничего не делает — route() сменил routeId) и это не занятие, вход, админ-панель или демо.
+function rerenderIfStill(id) {
+  if (app.routeId !== id) return;
+  const [a, , c] = currentPath().split('/').filter(Boolean);
+  if (isDemo(a) || a === 'login' || a === 'admin' || (a === 'd' && c)) return;
+  route();
 }
 
 // демо-занятия (#/demo, #/demo2) доступны без входа
@@ -173,6 +193,11 @@ function route() {
   else if (!lessonRoute && store.me()) { job = render(); } // главная и карта: показываем сохранённое, обновляем в фоне
   else job = gated(id, lessonRoute, render);
   if (a !== 'login' && !isDemo(a) && a !== 'admin' && !lessonRoute && !(needsMe && !store.me())) softRefresh(id);
+  if (loginSync && a !== 'login') { // первый экран после медленного входа
+    const ls = loginSync;
+    loginSync = null;
+    if (session && session.token === ls.token) ls.promise.then(changed => { if (changed) rerenderIfStill(id); });
+  }
   Promise.resolve(job).catch(e => { if (app.routeId === id) showError(e); else console.error(e); });
 }
 

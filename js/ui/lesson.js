@@ -6,9 +6,10 @@ import { isV2, allTasks, hasVariants, practiceTasks, wordCount, readMinutes, sor
 import { loadCourse, loadLesson, isLessonOpen, courseAccess, deadlineInfo, teacherGrade } from '../content.js';
 import { lessonKey } from '../store.js';
 import { identityChanged } from '../nav.js';
-import { repairDraft } from '../draft.js';
+import { repairDraft, answerWriter } from '../draft.js';
 import { xpGain, levelFor, newBadges, BADGES } from '../gamification.js';
-import { buildSubmission } from '../submit.js';
+import { buildSubmission, LIMIT_TEXT, holdText, rejectText } from '../submit.js';
+import { uploadFile } from '../upload.js';
 import { CHARACTERS } from '../../content/story.js';
 
 export async function renderLesson(app, discipline, n) {
@@ -59,6 +60,7 @@ export async function renderLesson(app, discipline, n) {
   const owner = preview ? null : app.store.studentId();
   const ownerChanged = () => !preview && identityChanged(owner, app.store.studentId());
   let evicted = false;
+  let closed = false; // черновик сдан или очищен: поздние ответы (загрузка файла) больше не пишутся
   const evict = () => {
     if (evicted) return;
     evicted = true;
@@ -212,6 +214,14 @@ export async function renderLesson(app, discipline, n) {
   // ui: { body, feedback, footer, lockedFooter?() — содержимое подвала после проверки, onLock(), onSkip() }
   function mountTask(t, ui) {
     const type = TASK_TYPES[t.type];
+    // задание занято (идёт загрузка файла): «Сохранить ответ» и «Пропустить» недоступны
+    let busy = false;
+    // для задания file: загрузка в хранилище от имени студента; в демо-занятии загрузки нет
+    const extra = {
+      demo: preview,
+      setBusy: b => { busy = !!b; if (!draft.locked[t.id]) drawFooter(); },
+      upload: preview ? null : file => uploadFile(app.api, { discipline, lesson: lesson.number, taskId: t.id, file, accept: t.accept, maxMb: t.maxMb }, (...a) => fetch(...a)),
+    };
     const { body, feedback, footer } = ui;
     const showFeedback = r => {
       if (type.manual && draft.answers[t.id] === null) {
@@ -230,15 +240,17 @@ export async function renderLesson(app, discipline, n) {
       if (cls === 'right') celebrate(feedback);
     };
     function lock() {
+      if (busy) return;
       draft.locked[t.id] = true;
       save();
       body.replaceChildren();
-      type.render(t, body, { answer: draft.answers[t.id], onChange: () => {}, locked: true });
+      type.render(t, body, { ...extra, answer: draft.answers[t.id], onChange: () => {}, locked: true });
       showFeedback(type.check(t, draft.answers[t.id]));
       drawFooter();
       if (ui.onLock) ui.onLock();
     }
     function skip() {
+      if (busy) return;
       if (!confirm('Пропустить задание? За него будет 0 баллов, вернуться к нему нельзя.')) return;
       if (!type.manual || draft.answers[t.id] === undefined) draft.answers[t.id] = null;
       draft.locked[t.id] = true;
@@ -248,13 +260,14 @@ export async function renderLesson(app, discipline, n) {
     function drawFooter() {
       if (draft.locked[t.id]) { footer.replaceChildren(ui.lockedFooter ? ui.lockedFooter() : ''); return; }
       footer.replaceChildren(
-        h('button', { class: 'btn primary big', type: 'button', disabled: !type.ready(t, draft.answers[t.id]), onclick: lock }, type.manual ? 'Сохранить ответ' : 'Проверить'),
-        h('button', { class: 'link-btn', type: 'button', onclick: skip }, 'Пропустить задание'));
+        h('button', { class: 'btn primary big', type: 'button', disabled: busy || !type.ready(t, draft.answers[t.id]), onclick: lock }, type.manual ? 'Сохранить ответ' : 'Проверить'),
+        h('button', { class: 'link-btn', type: 'button', disabled: busy, onclick: skip }, 'Пропустить задание'));
     }
     const locked = !!draft.locked[t.id];
-    const onChange = a => { draft.answers[t.id] = a; save(); drawFooter(); };
+    // ответ может прийти после сохранения/пропуска задания, сдачи работы или ухода с экрана — тогда он не пишется
+    const onChange = answerWriter(draft, t.id, { isActive: () => !closed && app.routeId === my, onWrite: () => { save(); drawFooter(); } });
     try {
-      type.render(t, body, { answer: draft.answers[t.id], locked, onChange: locked ? () => {} : onChange });
+      type.render(t, body, { ...extra, answer: draft.answers[t.id], locked, onChange: locked ? () => {} : onChange });
       if (locked) showFeedback(type.check(t, draft.answers[t.id]));
       drawFooter();
     } catch (e) {
@@ -453,7 +466,7 @@ export async function renderLesson(app, discipline, n) {
     async function submitNow() {
       submitBtn.disabled = true;
       errLine.textContent = '';
-      if (preview) { app.store.clearDraft(key); app.go('/'); return; }
+      if (preview) { closed = true; app.store.clearDraft(key); app.go('/'); return; }
       if (ownerChanged()) { evict(); return; } // аккаунт сменили в другой вкладке: работа остаётся в черновике владельца
       if (!app.store.session()) { // сессия пропала (выход в другой вкладке): работа остаётся в черновике
         app.flash = 'Войдите, чтобы сдать работу';
@@ -473,6 +486,7 @@ export async function renderLesson(app, discipline, n) {
         badges = app.store.addBadges(newBadges(app.store.state(), { perfectTypes: grade.perfectTypes }));
         const after = levelFor(app.store.state().xp);
         levelUp = after.index > before.index ? after : null;
+        closed = true;
         app.store.clearDraft(key);
         app.submittedKey = key; // если сессия истечёт при отправке, вход вернёт студента на карту курса, а не в сданное занятие
       } catch (e) {
@@ -481,18 +495,24 @@ export async function renderLesson(app, discipline, n) {
         return;
       }
       submitBtn.textContent = 'Отправляем…';
-      const { sent } = await app.submitter.submit(sub);
+      const { sent, limit, hold, rejected } = await app.submitter.submit(sub);
       if (app.routeId !== my) return; // например, сессия истекла: сдача в очереди, студента ждёт экран входа
-      view.replaceChildren(done({ sent, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max }));
+      view.replaceChildren(done({ sent, limit, hold, rejected, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max }));
       window.scrollTo(0, 0);
     }
   }
 
-  function done({ sent, gain, badges, levelUp, perfect }) {
+  function done({ sent, limit, hold, rejected, gain, badges, levelUp, perfect }) {
+    // rejected — сервер отказал (повреждённая сдача): никакого «сдано», только причина и просьба сообщить преподавателю
+    const failed = rejected !== undefined;
     const box = h('div', { class: 'done' },
-      h('div', { class: 'done-icon', 'aria-hidden': 'true' }, sent ? '🎉' : '💾'),
-      h('h1', {}, sent ? 'Работа сдана!' : 'Работа сохранена на телефоне'),
-      h('p', {}, sent ? 'Результат уже в таблице преподавателя.' : 'Сейчас нет связи с сервером. Работа отправится автоматически, когда появится интернет — просто откройте сайт ещё раз. Не очищайте данные браузера.'),
+      h('div', { class: 'done-icon', 'aria-hidden': 'true' }, sent ? '🎉' : failed ? '⚠️' : '💾'),
+      h('h1', {}, sent ? 'Работа сдана!' : failed ? 'Работа не принята' : 'Работа сохранена на телефоне'),
+      h('p', { role: failed ? 'alert' : null }, sent ? 'Результат уже в таблице преподавателя.'
+        : failed ? `Сервер не принял работу: ${rejectText(rejected)} — сообщите преподавателю.`
+          : limit ? `${LIMIT_TEXT}. Не очищайте данные браузера.`
+            : hold ? `${holdText(hold)}. Не очищайте данные браузера.`
+              : 'Сейчас нет связи с сервером. Работа отправится автоматически, когда появится интернет — просто откройте сайт ещё раз. Не очищайте данные браузера.'),
       deadline && deadline.overdue ? h('p', { class: 'hint' }, 'Работа сдана после срока — преподаватель увидит отметку.') : '',
       h('div', { class: 'xp-gain' }, gain ? `+${gain} XP` : 'XP начисляются за улучшение результата'),
       levelUp ? h('div', { class: 'card level-up' }, `⬆ Новый уровень: ${levelUp.title}!`) : '',
@@ -500,7 +520,7 @@ export async function renderLesson(app, discipline, n) {
         h('div', { class: 'badge got' }, h('div', { class: 'badge-icon', 'aria-hidden': 'true' }, b.icon), h('div', { class: 'badge-title' }, b.title), h('div', { class: 'badge-desc' }, b.desc))))) : '',
       h('a', { class: 'btn primary big', href: back }, 'К карте курса'),
       h('a', { class: 'btn ghost big', href: '#/' }, 'На главную'));
-    if (perfect || levelUp || badges.length) setTimeout(() => celebrate(box), 50);
+    if (!failed && (perfect || levelUp || badges.length)) setTimeout(() => celebrate(box), 50);
     return box;
   }
 

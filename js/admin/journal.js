@@ -3,6 +3,7 @@ import { DISC, select, hashQuery, loading, loadError, emptyBox } from './common.
 import { errText } from '../ui/login.js';
 
 const own = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
+const SUSPICIOUS_TIP = 'Подозрительно: идеальный автобалл быстрее чем за 3 минуты или больше 5 попыток за день. Проверьте строки студента в листе «Ответы».';
 
 export function workHref(studentId, d, n, extra) {
   return `#${hashQuery('/admin/work', Object.assign({ student: studentId, d, n }, extra || {}))}`;
@@ -51,13 +52,14 @@ export async function renderJournal(ctx, main) {
     if (!c) return h('td', { class: 'jcell empty' }, h('span', { class: 'jdash', 'aria-label': 'не сдано' }, '–'));
     const pct = c.max > 0 ? `${Math.round(c.best / c.max * 100)}%` : '—';
     const marks = [c.manual === 'pending' ? '⏳' : '', c.manual === 'graded' ? '💬' : '', c.late ? '⏰' : '', c.variant === 'pc' ? '💻' : ''].filter(Boolean).join('');
-    const note = [`автобалл ${c.best} из ${c.max}`, c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`].filter(Boolean).join(', ');
+    const note = [`автобалл ${c.best} из ${c.max}`, c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`, c.suspicious ? 'подозрительно: идеал быстрее 3 минут или больше 5 попыток за день' : ''].filter(Boolean).join(', ');
     return h('td', { class: 'jcell' }, h('a', { class: `jlink${c.late ? ' late' : ''}`, href: workHref(s.id, disc, n), title: note, 'aria-label': `${s.name}, ПЗ ${n}: ${note}` },
-      h('span', { class: 'jpct' }, pct), marks ? h('span', { class: 'jmarks', 'aria-hidden': 'true' }, marks) : ''));
+      h('span', { class: 'jpct' }, pct), marks ? h('span', { class: 'jmarks', 'aria-hidden': 'true' }, marks) : '',
+      c.suspicious === true ? h('span', { class: 'jwarn', title: SUSPICIOUS_TIP, 'aria-hidden': 'true' }, '⚠') : ''));
   };
 
   body.replaceChildren(
-    h('p', { class: 'hint' }, '% — лучший автоматический балл; ⏳ ждёт ручной проверки; 💬 оценено преподавателем; ⏰ сдано после срока; 💻 сдано в ПК-варианте. Нажмите на ячейку — откроется работа.'),
+    h('p', { class: 'hint' }, '% — лучший автоматический балл; ⏳ ждёт ручной проверки; 💬 оценено преподавателем; ⏰ сдано после срока; 💻 сдано в ПК-варианте; ⚠ подозрительная сдача (идеал быстрее 3 минут или больше 5 попыток за день). Нажмите на ячейку — откроется работа.'),
     h('div', { class: 'journal-wrap', tabindex: '0', role: 'region', 'aria-label': 'Журнал: прокручивается по горизонтали' },
       h('table', { class: 'journal' },
         h('thead', {}, h('tr', {}, h('th', { class: 'jname' }, 'Студент'), lessons.map(n => h('th', { class: 'jh' }, `ПЗ ${n}`)))),

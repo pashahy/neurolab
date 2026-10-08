@@ -11,5 +11,6 @@ import text from './text.js';
 import terminal from './terminal.js';
 import python from './python.js';
 import numeric from './numeric.js';
+import file from './file.js';
 
-export const TASK_TYPES = { single, multi, fill, swipe, order, match, categorize, hotspot, 'prompt-builder': promptBuilder, dilemma, text, terminal, python, numeric };
+export const TASK_TYPES = { single, multi, fill, swipe, order, match, categorize, hotspot, 'prompt-builder': promptBuilder, dilemma, text, terminal, python, numeric, file };

@@ -8,6 +8,19 @@ export const sigOf = t => { const s = JSON.stringify(t); let h = 5381; for (let 
 // индекс первого раздела лекции с незакрытым контрольным вопросом (-1, если всё закрыто)
 const firstOpenSection = (lecture, locked) => lecture.findIndex(s => s && Array.isArray(s.check) && s.check.some(t => !locked[t.id]));
 
+// Запись ответа задания, которая может прийти позже (например, загрузка файла закончилась):
+// не пишет, если задание уже сохранено или пропущено (locked), экран сменился или черновик сдан/очищен (isActive() === false).
+// onWrite(a) — после записи (сохранить черновик, обновить кнопки). Возвращает true, если ответ записан.
+export function answerWriter(draft, taskId, { isActive = () => true, onWrite = () => {} } = {}) {
+  return a => {
+    if (!isActive() || !isObj(draft) || !isObj(draft.answers)) return false;
+    if (isObj(draft.locked) && draft.locked[taskId]) return false;
+    draft.answers[taskId] = a;
+    onWrite(a);
+    return true;
+  };
+}
+
 // Приводит сохранённый черновик к безопасному виду для текущей версии занятия.
 // v1: {stage: intro|task|finish, index, …}; v2 добавляет stage «lecture» и номер раздела section,
 // а у занятия с вариантами практики — stage «choose» и variant ('phone' | 'pc').
