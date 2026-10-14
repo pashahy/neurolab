@@ -27,7 +27,8 @@ const failText = e => {
 };
 
 // variant ('phone' | 'pc') — только у занятия с вариантами практики; без него поля в сдаче нет
-export function buildSubmission({ profile, discipline, lesson, answers, grade, texts, startedAt, variant, now = Date.now(), rnd = Math.random }) {
+// v4 — данные этапов занятия формата v4 (цель, разминка, инструктаж, рефлексия, ⭐); у остальных форматов поля в сдаче нет
+export function buildSubmission({ profile, discipline, lesson, answers, grade, texts, startedAt, variant, v4, now = Date.now(), rnd = Math.random }) {
   const sub = {
     id: `${now.toString(36)}-${Math.floor(rnd() * 1e9).toString(36)}`,
     studentId: profile.id,
@@ -44,8 +45,12 @@ export function buildSubmission({ profile, discipline, lesson, answers, grade, t
     texts,
   };
   if (variant) sub.variant = variant;
+  if (v4) sub.v4 = v4;
   return sub;
 }
+
+// Сдача ДЗ (формат v4) — в новом модуле hw-submit.js (в кэше телефона нет его старой копии); здесь только повторный экспорт
+export { buildHomeworkSubmission } from './hw-submit.js';
 
 export function createSubmitter({
   store, url, fetchFn = (...a) => fetch(...a),
@@ -108,7 +113,8 @@ export function createSubmitter({
   // сбой сети, таймаут, busy, прочие ошибки и ответ не того вида — исключение (с признаком kind: 'busy' | 'server')
   async function send(item) {
     if (!url) throw new Error('Адрес сервера не настроен');
-    const data = await postJson(fetchFn, url, { action: 'submit', token: getToken(), submission: item }, timeoutMs);
+    const hw = item.kind === 'hw';
+    const data = await postJson(fetchFn, url, { action: hw ? 'homeworkSubmit' : 'submit', token: getToken(), submission: item }, timeoutMs);
     if (!data || typeof data !== 'object' || Array.isArray(data)) { // null, число, строка, массив — не ответ нашего сервера
       const bad = new Error(BAD_REPLY_TEXT);
       bad.kind = 'server';
@@ -116,6 +122,8 @@ export function createSubmitter({
     }
     if (data.auth) return { kind: 'auth' };
     if (data.ok === true) return { kind: 'ok' };
+    // сервер без homeworkSubmit (скрипт таблицы ещё не обновлён): ДЗ не теряем, оставляем в очереди как отложенное
+    if (hw && data.error === 'unknown action') return { kind: 'hold', error: data.error };
     if (data.reject) return { kind: 'reject', error: data.error };
     if (data.limit) return { kind: 'limit' };
     if (data.hold) return { kind: 'hold', error: data.error };
@@ -286,7 +294,7 @@ export function createSubmitter({
         const t = tries.get(q.id);
         const kind = held.has(q.id) ? 'hold' : lim ? 'limit' : t ? t.kind : null;
         const error = held.has(q.id) ? held.get(q.id) : t ? t.error : '';
-        return { id: q.id, discipline: q.discipline, lesson: q.lesson, attempts: t ? t.attempts : 0, kind, error };
+        return { id: q.id, discipline: q.discipline, lesson: q.lesson, hw: q.kind === 'hw', attempts: t ? t.attempts : 0, kind, error };
       });
     },
     // последняя ошибка именно этой работы

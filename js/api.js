@@ -1,6 +1,8 @@
 import { postJson } from './http.js';
 
-export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () => null, getAdminToken = () => null }) {
+const COMMENT_KEY = /^[a-z0-9]+\/\d{1,3}$/;
+
+export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () => null, getAdminToken = () => null, now = () => Date.now() }) {
   async function request(action, body, token) {
     if (!url) throw new Error('Адрес сервера не настроен');
     const payload = Object.assign({}, body, { action });
@@ -22,9 +24,47 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
   }
   const call = (action, body) => request(action, body, getToken());
   const admin = (action, body) => request(action, body, getAdminToken());
+  // Комментарии преподавателя группе из последнего ответа myGrades: { 'dup03/21': текст }. Привязаны к токену студента
+  // (после смены сессии чужие не показываются); в хранилище не пишутся — при перезагрузке придут с первым же myGrades.
+  let commentsCache = { token: null, at: 0, comments: {} };
+  const cleanComments = c => {
+    const out = {};
+    if (c && typeof c === 'object' && !Array.isArray(c)) {
+      Object.keys(c).forEach(k => { if (COMMENT_KEY.test(k) && typeof c[k] === 'string' && c[k].trim()) out[k] = c[k]; });
+    }
+    return out;
+  };
+  // одновременные вызовы (несколько карточек комментария, обновление аккаунта) делят один запрос на токен
+  let gradesInFlight = null; // { token, promise }
+  const myGrades = () => {
+    const token = getToken();
+    if (gradesInFlight && gradesInFlight.token === token) return gradesInFlight.promise;
+    const entry = { token, promise: null };
+    entry.promise = (async () => {
+      try {
+        const d = await call('myGrades');
+        commentsCache = { token, at: now(), comments: cleanComments(d.comments) };
+        return d.grades;
+      } finally {
+        if (gradesInFlight === entry) gradesInFlight = null;
+      }
+    })();
+    gradesInFlight = entry;
+    return entry.promise;
+  };
   return {
     call,
     admin,
+    // панель преподавателя v4: сводка занятия и комментарий группе (поля discipline и lesson, не d и n)
+    adminLessonSummary: ({ group, discipline, lesson }) => admin('adminLessonSummary', { group, discipline, lesson }),
+    adminGroupComment: ({ group, discipline, lesson, text }) => admin('adminGroupComment', { group, discipline, lesson, text }),
+    // комментарии группы текущего студента: из кэша (синхронно) или свежие, если кэш старше maxAgeMs
+    groupComments: () => (commentsCache.token !== null && commentsCache.token === getToken() ? commentsCache.comments : {}),
+    myComments: async maxAgeMs => {
+      const fresh = commentsCache.token !== null && commentsCache.token === getToken() && now() - commentsCache.at < maxAgeMs;
+      if (!fresh) await myGrades();
+      return commentsCache.token === getToken() ? commentsCache.comments : {};
+    },
     // файлы студентов и хранилище (админ-панель): подписанная ссылка на чтение, настройки, тестовая загрузка
     adminFileUrl: params => admin('adminFileUrl', params),
     adminStorage: () => admin('adminStorage'),
@@ -38,7 +78,7 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
       const d = await call('rating');
       return { top: d.top, me: d.me, total: d.total };
     },
-    myGrades: async () => (await call('myGrades')).grades,
+    myGrades,
     // прогресс студента с сервера {ok, studentId, progress, xp, days}; старый сервер без myProgress — null
     // (сбой сети и истёкшая сессия — исключение, как у остальных запросов)
     myProgress: async () => {

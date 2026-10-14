@@ -1,8 +1,11 @@
 import { newBadges } from './gamification.js';
+import { homeworkMark } from './hw-mark.js';
 
 const KEY = 'neurolab.v1';
 
 export const lessonKey = (d, n) => `${d}/${n}`;
+// ключ черновика ДЗ — в новом модуле hw-submit.js (в кэше телефона нет его старой копии); здесь только повторный экспорт
+export { homeworkDraftKey } from './hw-submit.js';
 
 export function memoryStorage() {
   const m = new Map();
@@ -17,7 +20,7 @@ export function safeLocalStorage() {
   } catch { return memoryStorage(); }
 }
 
-const emptyBucket = () => ({ progress: {}, drafts: {}, xp: 0, badges: [], days: [] });
+const emptyBucket = () => ({ progress: {}, drafts: {}, hw: {}, xp: 0, badges: [], days: [] });
 const empty = () => ({ session: null, me: null, grades: null, adminToken: null, byStudent: Object.create(null), queue: [], configCache: null });
 
 // сохранённые данные могли испортиться или остаться от старой версии — берём только поля нужного типа
@@ -25,11 +28,22 @@ const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isStr = v => typeof v === 'string' && v !== '';
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
+// Запись ДЗ одного ПЗ: { best, max, level, mark, attempts, at, xpScore }; битые записи отбрасываются.
+// best/max/level/mark — ОДНА попытка, лучшая по отметке, затем по баллу (как на сервере); xpScore — наибольший балл по всем попыткам
+// (от него считается XP: round(xpScore × 5)), не меньше best; у записи старой версии без xpScore он равен best.
+const cleanHw = r => (isObj(r) && Number.isFinite(r.best) && Number.isFinite(r.max) && Number.isInteger(r.attempts) && r.attempts >= 0
+  ? {
+    best: r.best, max: r.max, level: r.level === 'adv' ? 'adv' : 'base', mark: [0, 3, 4, 5].includes(r.mark) ? r.mark : 0, attempts: r.attempts,
+    at: typeof r.at === 'string' ? r.at : null, xpScore: Number.isFinite(r.xpScore) ? Math.max(r.xpScore, r.best) : r.best,
+  }
+  : null);
+
 function sanitizeBucket(raw) {
   const out = emptyBucket();
   if (!isObj(raw)) return out;
   if (isObj(raw.progress)) out.progress = raw.progress;
   if (isObj(raw.drafts)) out.drafts = raw.drafts;
+  if (isObj(raw.hw)) for (const k of Object.keys(raw.hw)) { const r = cleanHw(raw.hw[k]); if (r && k !== '__proto__') out.hw[k] = r; }
   if (Number.isFinite(raw.xp)) out.xp = raw.xp;
   for (const k of ['badges', 'days']) if (Array.isArray(raw[k])) out[k] = raw[k];
   return out;
@@ -39,13 +53,29 @@ function sanitizeBucket(raw) {
 // отбрасываются; perfectTypes — объединение по всем ПЗ (для значков за типы заданий).
 const PROGRESS_KEY = /^[a-z0-9]+\/\d{1,3}$/;
 const timeOf = v => { const t = typeof v === 'string' ? Date.parse(v) : NaN; return isNaN(t) ? null : t; };
+// ДЗ ПЗ в ответе сервера: progress[k].hw = { best, max, mark, level, attempts, xpScore } -> запись ДЗ (как cleanHw, но без `at`) или null;
+// сервер старой версии не присылает xpScore — тогда он равен best
+const cleanServerHw = r => (isObj(r) && Number.isFinite(r.best) && Number.isFinite(r.max) && Number.isInteger(r.attempts) && r.attempts >= 0
+  && (r.level === 'base' || r.level === 'adv') && [0, 3, 4, 5].includes(r.mark)
+  ? { best: r.best, max: r.max, level: r.level, mark: r.mark, attempts: r.attempts, at: null, xpScore: Number.isFinite(r.xpScore) ? Math.max(r.xpScore, r.best) : r.best }
+  : null);
+// попытка a лучше b: отметка выше, при равной отметке — выше балл (best)
+const hwBetter = (a, b) => a.mark > b.mark || (a.mark === b.mark && a.best > b.best);
+// запись согласована сама с собой: отметка — та, что даёт её результат (запись, собранная прежней версией из двух попыток, — нет)
+const hwSound = r => r.mark === homeworkMark({ score: r.best, max: r.max, level: r.level });
+
 function cleanServerProgress(data) {
   if (!isObj(data) || data.ok !== true || !isObj(data.progress)) return null;
   const progress = {};
+  const hw = {};
   const perfectTypes = [];
   Object.keys(data.progress).forEach(k => {
     const p = data.progress[k];
     if (!PROGRESS_KEY.test(k) || !isObj(p) || !Number.isFinite(p.best) || !Number.isFinite(p.max)) return;
+    const h = cleanServerHw(p.hw);
+    if (h) hw[k] = h;
+    // ПЗ без сдач занятия, только с ДЗ (сервер присылает его с нулями): записи прогресса занятия не создаём
+    if (h && p.attempts === 0) return;
     progress[k] = {
       best: p.best, max: p.max, attempts: Number.isFinite(p.attempts) ? p.attempts : 0,
       perfect: p.perfect === true, at: timeOf(p.lastAt) === null ? null : p.lastAt,
@@ -54,6 +84,7 @@ function cleanServerProgress(data) {
   });
   return {
     progress,
+    hw,
     xp: Number.isFinite(data.xp) && data.xp > 0 ? data.xp : 0,
     days: Array.isArray(data.days) ? data.days.filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [],
     perfectTypes,
@@ -186,18 +217,59 @@ export function createStore(storage = safeLocalStorage()) {
       save();
       return b.progress[key];
     },
+    // ДЗ формата v4: { best, max, level, mark, attempts, at, xpScore } по ПЗ. Попытки считаются на устройстве (лимит 3 проверяет и сервер).
+    // best/max/level/mark — одна попытка: лучшая по отметке, затем по баллу (при равенстве остаётся прежняя), как на сервере.
+    // XP: round(xpScore × 5), где xpScore — наибольший балл по всем попыткам (не убывает, даже если у лучшей по отметке попытки балл
+    // меньше); добавляется прирост сверх уже начисленного; gain в ответе — прирост этой попытки.
+    homework: key => (own(bucket().hw, key) ? bucket().hw[key] : null),
+    recordHomework(key, { score, max, level, mark, at }) {
+      const b = bucket();
+      const prev = own(b.hw, key) ? b.hw[key] : null;
+      const better = !prev || hwBetter({ mark, best: score }, prev);
+      const prevXp = prev ? prev.xpScore : 0;
+      const rec = {
+        best: better ? score : prev.best,
+        max: better ? max : prev.max,
+        level: better ? level : prev.level,
+        mark: better ? mark : prev.mark,
+        attempts: (prev ? prev.attempts : 0) + 1,
+        at,
+        xpScore: Math.max(prevXp, score),
+      };
+      b.hw[key] = rec;
+      const gain = Math.max(0, Math.round(rec.xpScore * 5) - Math.round(prevXp * 5));
+      b.xp += gain;
+      touch();
+      save();
+      return Object.assign({}, rec, { gain });
+    },
     // Слияние прогресса с сервера (другое устройство) с локальным; true — что-то изменилось.
     // forStudentId — для кого запрашивали: ответ сливается, только если и запрос, и ответ — для текущего студента.
     // По ПЗ: лучший балл и число попыток — больше из двух, perfect — у любого, max — с сервера, время — позднее;
     // ПЗ, которых нет на сервере (офлайн-очередь), остаются. Дни — объединение, XP — больший (локальный может быть
     // впереди только из-за очереди). Значки: прежние + те, что открывает объединённое состояние.
+    // ДЗ (progress[k].hw) сливается в раздел hw: см. комментарий ниже.
     mergeServerProgress(data, forStudentId) {
       const id = studentId();
       if (id === null || !isStr(forStudentId) || forStudentId !== id || !isObj(data) || data.studentId !== id) return false;
       const srv = cleanServerProgress(data);
       if (!srv) return false;
       const b = bucket();
-      const before = JSON.stringify([b.progress, b.xp, b.badges, b.days]);
+      const before = JSON.stringify([b.progress, b.hw, b.xp, b.badges, b.days]);
+      // ДЗ: попытки и xpScore — больше из двух; результат (best, max, level, mark) целиком у записи с лучшей отметкой, при равной — с
+      // большим баллом; при полном равенстве остаётся локальная запись (повторное слияние ничего не меняет). Локальная запись, не
+      // согласованная сама с собой (отметка не та, что даёт её результат: прежняя версия склеивала лучший балл одной попытки с лучшей
+      // отметкой другой), уступает серверной безусловно — гибрид чинится.
+      Object.keys(srv.hw).forEach(k => {
+        const sh = srv.hw[k];
+        const lh = own(b.hw, k) ? b.hw[k] : null;
+        if (!lh) { b.hw[k] = sh; return; }
+        const win = !hwSound(lh) || hwBetter(sh, lh) ? sh : lh;
+        b.hw[k] = {
+          best: win.best, max: win.max, level: win.level, mark: win.mark,
+          attempts: Math.max(lh.attempts, sh.attempts), at: lh.at, xpScore: Math.max(lh.xpScore, sh.xpScore),
+        };
+      });
       Object.keys(srv.progress).forEach(k => {
         const sp = srv.progress[k];
         const lp = own(b.progress, k) && isObj(b.progress[k]) ? b.progress[k] : null;
@@ -217,7 +289,7 @@ export function createStore(storage = safeLocalStorage()) {
       b.xp = Math.max(b.xp, srv.xp);
       const fresh = newBadges(b, { perfectTypes: srv.perfectTypes });
       if (fresh.length) b.badges = b.badges.concat(fresh);
-      const changed = JSON.stringify([b.progress, b.xp, b.badges, b.days]) !== before;
+      const changed = JSON.stringify([b.progress, b.hw, b.xp, b.badges, b.days]) !== before;
       if (changed) { touch(); save(); }
       return changed;
     },

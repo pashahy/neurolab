@@ -20,6 +20,8 @@ export async function renderRating(app) {
   } catch (e) {
     if (app.routeId !== my) return;
     if (e && e.auth) { app.authExpired(); return; }
+    // сервер без таблицы баллов («no table») не считает рейтинг: не показываем неподтверждённые числа
+    if (e && !e.network && e.message === 'no table') { box.replaceChildren(h('p', {}, 'Рейтинг временно недоступен. Попробуйте позже.')); return; }
     box.replaceChildren(h('p', {}, 'Рейтинг сейчас недоступен: нет связи с сервером. Попробуйте позже.'));
   }
 }

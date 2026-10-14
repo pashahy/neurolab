@@ -1,21 +1,32 @@
 import { TASK_TYPES } from './tasks/registry.js';
 import { round1 } from './util/text.js';
 import { allTasks } from './lesson-model.js';
+import { isAdv } from './lesson-v4.js';
+
+const sum = (arr, f) => round1(arr.reduce((s, i) => s + f(i), 0));
 
 export function gradeLesson(lesson, answers = {}, variant) {
   const items = allTasks(lesson, variant).map(t => {
     const type = TASK_TYPES[t.type];
     const r = type.check(t, answers[t.id]);
-    return { id: t.id, type: t.type, score: r.score, max: r.max, manual: !!type.manual };
+    const item = { id: t.id, type: t.type, score: r.score, max: r.max, manual: !!type.manual };
+    if (isAdv(t)) item.adv = true;
+    return item;
   });
   const auto = items.filter(i => !i.manual);
-  const sum = (arr, f) => round1(arr.reduce((s, i) => s + f(i), 0));
+  const advItems = items.filter(i => i.adv);
   return {
     items,
     score: sum(auto, i => i.score),
     max: sum(auto, i => i.max),
     manualMax: sum(items.filter(i => i.manual), i => i.max),
     perfectTypes: [...new Set(auto.filter(i => i.max > 0 && i.score === i.max).map(i => i.type))],
+    // ⭐: ручные ⭐ на клиенте не учитываются в done — их оценит преподаватель
+    adv: {
+      max: sum(advItems.filter(i => !i.manual), i => i.max),
+      manualMax: sum(advItems.filter(i => i.manual), i => i.max),
+      done: advItems.some(i => !i.manual && i.max > 0 && i.score === i.max),
+    },
   };
 }
 

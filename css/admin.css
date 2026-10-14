@@ -94,6 +94,50 @@ table.journal { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .jwarn { font-size: 0.85rem; line-height: 1.1; color: var(--bad); cursor: help; }
 .jcell.empty { min-height: 52px; color: var(--muted); }
 .jdash { display: inline-block; padding: 14px 6px; }
+/* отметка за занятие и ДЗ под процентом; ячейка шире, но таблица по-прежнему прокручивается внутри .journal-wrap */
+.jmark { font-weight: 700; font-size: 0.9rem; line-height: 1.2; }
+.jmark.prelim { color: var(--warn); }
+.jprelim { margin-left: 4px; font-size: 0.72rem; font-weight: 600; color: var(--warn); }
+.jhw { font-size: 0.78rem; line-height: 1.25; color: var(--muted); font-weight: 600; }
+.jhw.adv { color: var(--primary); }
+.jcell.hwonly .jlink { cursor: default; }
+
+/* сводка занятия: полосы в процентах */
+.sum-title { margin: 4px 0 0; overflow-wrap: anywhere; }
+.sum-block h2 { margin-bottom: 4px; }
+.sum-block h3 { margin: 14px 0 6px; font-size: 1rem; }
+.sum-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+ol.sum-list { counter-reset: sum; }
+.sum-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(100px, 3fr) minmax(86px, auto); align-items: center; gap: 4px 12px; }
+.sum-label { min-width: 0; overflow-wrap: anywhere; }
+.sum-tag { margin-left: 8px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--bad-soft); color: var(--bad); font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.sum-row.extra .sum-label { color: var(--muted); }
+.sum-bar, .sum-stack { height: 12px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; display: flex; }
+.sum-fill { display: block; height: 100%; background: var(--primary); border-radius: var(--radius-pill); }
+.sum-value { font-weight: 700; white-space: nowrap; text-align: right; }
+.sum-seg { display: block; height: 100%; }
+.sum-seg.ok { background: var(--ok); }
+.sum-seg.part { background: var(--warn); }
+.sum-seg.bad { background: var(--bad); }
+.sum-refl { grid-template-columns: minmax(0, 2fr) minmax(100px, 3fr); }
+.sum-counts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.sum-count { padding: 1px 8px; border-radius: var(--radius-pill); font-size: 0.82rem; font-weight: 700; background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+.sum-count.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
+.sum-count.part { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+.sum-count.bad { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.sum-next { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 6px; }
+.sum-next li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sum-mistakes .sum-fill { background: var(--bad); }
+.sum-comment { width: 100%; min-height: 110px; resize: vertical; }
+.sum-comment-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.sum-comment-foot .hint { margin: 0; }
+.hint.over { color: var(--bad); font-weight: 700; }
+.sum-status { min-height: 1.4em; margin: 8px 0 0; color: var(--ok); }
+@media (max-width: 560px) {
+  .sum-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .sum-row .sum-bar { grid-column: 1 / -1; grid-row: 2; }
+  .sum-refl { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* очередь проверки */
 .review-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }

@@ -145,8 +145,8 @@ function rerenderIfStill(id) {
   route();
 }
 
-// демо-занятия (#/demo, #/demo2) доступны без входа
-const isDemo = a => a === 'demo' || a === 'demo2';
+// демо-занятия (#/demo, #/demo2, #/demo4) доступны без входа
+const isDemo = a => a === 'demo' || a === 'demo2' || a === 'demo4';
 
 function route() {
   const raw = location.hash.replace(/^#/, '') || '/';

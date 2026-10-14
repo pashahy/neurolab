@@ -468,6 +468,11 @@ a.course-card:active { transform: scale(0.99); }
 .node-grade { flex: none; margin-left: auto; font-size: 1.3rem; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .fb.teacher { background: var(--ok-soft); }
 .teacher-comment { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
+/* комментарий преподавателя всей группе (экран входа и экран после сдачи) */
+.gc-slot:empty { display: none; }
+.group-comment { background: var(--primary-soft); border-color: var(--primary); text-align: left; }
+.group-comment .v4-label { color: var(--text); }
+.group-comment-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---- формат v2: лекция, кейсы, словарь, таблицы и выноски ---- */
 /* таблицы из markdown — только в тексте лекции, заданий, шпаргалки и кейса (у админки свой .table-wrap в admin.css) */
@@ -554,7 +559,9 @@ blockquote p { margin: 0.35rem 0; }
   .lesson.split { width: min(1136px, calc(100vw - 64px)); margin-left: calc(50% - min(568px, calc(50vw - 32px))); }
   .lesson.split .lesson-title { font-size: 1.75rem; max-width: 34em; }
   .lesson-tools .btn { flex: 0 0 auto; }
-  .lesson-tools.has-sheet { display: none; }
+  /* шпаргалка заменяет «Термины» и «Лекция»; «📋 Критерии» (v4) остаётся */
+  .lesson-tools.has-sheet:not(.has-crit) { display: none; }
+  .lesson-tools.has-sheet .btn:not(.tool-crit) { display: none; }
   .lesson-grid { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 40px; align-items: start; margin-top: 12px; }
   .lesson-grid.solo { grid-template-columns: minmax(0, 760px); justify-content: center; }
   /* липкая колонка со своей прокруткой; 68 px — под шапкой сайта */
@@ -594,3 +601,138 @@ blockquote p { margin: 0.35rem 0; }
   .variant-opt { align-items: flex-start; }
 }
 .choose-back { margin-top: 8px; }
+
+/* ---- формат v4: строка этапа, вход, целеполагание, разминка ---- */
+.lesson-stage { margin: -0.4rem 0 0.9rem; }
+.lesson-stage .pill { white-space: normal; }
+.muted.small { font-size: 0.85rem; }
+.v4-label { margin: 0 0 8px; font-family: var(--font-body); font-weight: 700; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.where-crumbs { margin: 0 0 2px; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+.where-pz { margin: 8px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; line-height: 1.25; }
+.where-nav { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.where-nav li { font-size: 0.92rem; line-height: 1.4; overflow-wrap: anywhere; }
+.career > div p { margin: 0.3rem 0; }
+.method { margin: -4px 4px 16px; }
+.plan-list { list-style: none; margin: 0; padding: 0; counter-reset: plan; }
+.plan-list li { counter-increment: plan; display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.plan-list li:last-child { border-bottom: none; }
+.plan-list li::before { content: counter(plan); flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--primary); font-family: var(--font-display); font-weight: 700; font-size: 0.78rem; }
+.plan-name { display: flex; flex-direction: column; min-width: 0; font-weight: 700; }
+.plan-what { font-weight: 400; font-size: 0.88rem; color: var(--muted); }
+.plan-min { flex: none; margin-left: auto; font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+.plan-total { margin: 8px 0 0; text-align: right; }
+
+.goal-question { margin: 12px 0 6px; }
+.goal-review { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+.goal-skill { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 16px; border: 2px solid var(--border-strong); background: var(--surface); }
+.goal-skill.need { border-color: var(--ok); background: var(--ok-soft); }
+.goal-skill.extra { background: var(--surface-2); }
+.goal-mark { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; font-weight: 800; line-height: 1; }
+.goal-skill.need .goal-mark { background: var(--ok); color: var(--ok-ink); }
+.goal-skill.extra .goal-mark { background: var(--bad); color: var(--bad-ink); }
+.goal-skill-body { min-width: 0; }
+.goal-skill-text { font-weight: 600; overflow-wrap: anywhere; }
+.goal-skill-tag { margin-top: 2px; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+.goal-why { margin: 6px 0 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+/* карточка цели — рамка фирменным градиентом, как у выбранного варианта практики */
+.goal-card { background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--grad) border-box; border: 2px solid transparent; padding: 16px; }
+.goal-text { margin: 0 0 4px; font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.goal-tasks-title { margin: 14px 0 6px; }
+.goal-tasks { margin: 0; padding-left: 1.3rem; }
+.goal-tasks li { margin: 0.3rem 0; overflow-wrap: anywhere; }
+
+/* разминка без баллов: счёт скрыт, ссылка «Повторить» под пояснением */
+.lesson-grid.warmup .fb-score { display: none; }
+.warm-repeat { display: flex; align-items: center; min-height: 44px; margin: 0; font-weight: 600; }
+p.warm-repeat { font-weight: 400; }
+
+/* ---- формат v4: критерии, инструктаж ОТ/ТБ, ⭐ в практике ---- */
+.where-link { display: block; min-height: 44px; padding: 10px 0; }
+.criteria { padding: 16px; }
+.crit-sums { margin: 0; }
+.crit-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.crit-row dt { font-weight: 600; min-width: 0; }
+.crit-row dd { margin: 0 0 0 auto; min-width: 0; text-align: right; color: var(--muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+.crit-total { border-bottom: none; }
+.crit-total dt, .crit-total dd { font-weight: 700; color: var(--text); }
+.crit-sub { margin: 16px 0 6px; font-size: 0.95rem; }
+.crit-scale { margin: 0; padding-left: 1.2rem; }
+.crit-scale li { margin: 0.25rem 0; overflow-wrap: anywhere; }
+.crit-note { margin: 12px 0 0; }
+.crit-adv { margin: 12px 0 0; padding: 10px 12px; border-radius: 14px; background: var(--warn-soft); overflow-wrap: anywhere; }
+.crit-manual ul { margin: 0; padding-left: 1.2rem; }
+.crit-manual li { margin: 0.3rem 0; overflow-wrap: anywhere; }
+.crit-manual p { margin: 0; }
+/* в окне «Критерии» рамка карточки не нужна */
+.modal .criteria { padding: 0; margin: 0; border: none; background: none; box-shadow: none; }
+
+.safety-lead { margin: 0 0 8px; }
+.safety-rule { padding: 14px 16px; margin-bottom: 12px; }
+.safety-rule .v4-label { margin-bottom: 2px; }
+.safety-text { margin: 0 0 10px; font-weight: 600; overflow-wrap: anywhere; }
+.safety-why { margin: 0; overflow-wrap: anywhere; }
+.safety-title { margin: 20px 0 4px; font-size: 1.15rem; }
+.safety-check { margin-top: 12px; }
+.safety-check .task-title { margin-top: 0; }
+.safety-check .task-footer { position: static; background: none; padding: 8px 0 0; }
+.safety-nav { margin-top: 12px; }
+.safety-nav .hint { margin: 0; }
+/* инструктаж без баллов: счёт скрыт, как в разминке */
+.lesson-grid.safety .fb-score { display: none; }
+@media (min-width: 1100px) {
+  .lesson-grid.safety > .lesson-main > .safety-title:first-child { margin-top: 0; }
+}
+
+.adv-card { background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--grad) border-box; border: 2px solid transparent; padding: 16px; }
+.adv-title { margin: 0 0 8px; font-size: 1.15rem; overflow-wrap: anywhere; }
+.adv-card p { margin: 0.4rem 0; overflow-wrap: anywhere; }
+.task-pills { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pill.adv { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+/* ---- формат v4: итоги, рефлексия, отметка, ДЗ ---- */
+.refl-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.refl-task { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.refl-task:last-child { padding-bottom: 0; border-bottom: none; }
+.refl-task-text { font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+.refl-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.refl-pick { flex: 1 1 auto; min-width: 0; }
+.refl-pick.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 700; }
+.refl-done-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.refl-done-list li { display: flex; gap: 10px; align-items: flex-start; overflow-wrap: anywhere; }
+.refl-ok { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--ok); color: var(--ok-ink); font-weight: 800; font-size: 0.8rem; line-height: 1; margin-top: 2px; }
+.refl-terms { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.refl-terms .pill { white-space: normal; }
+.refl-mlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.refl-mlist li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.refl-mname { min-width: 0; flex: 1 1 14rem; overflow-wrap: anywhere; }
+.refl-label { display: block; margin: 14px 0 6px; font-weight: 700; }
+.refl-gate { margin: 0 0 4px; text-align: center; }
+.mark-card { text-align: center; }
+.mark-big { font-family: var(--font-display); font-weight: 800; font-size: 2.4rem; line-height: 1.2; color: var(--primary); overflow-wrap: anywhere; }
+.mark-5 .mark-big, .mark-big.mark-5 { color: var(--ok); }
+.mark-0 .mark-big, .mark-big.mark-0 { color: var(--bad); font-size: 1.6rem; }
+.mark-pct { margin: 2px 0 0; }
+.mark-card .hint { margin: 6px 0 0; }
+
+.hw-card { padding: 16px; }
+.hw-why p { margin: 0.3rem 0; overflow-wrap: anywhere; }
+.hw-levels { display: grid; gap: 12px; margin-top: 12px; }
+.hw-level { display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 44px; padding: 14px 16px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; }
+.hw-level:disabled { opacity: 0.5; cursor: not-allowed; }
+.hw-level:active:not(:disabled) { transform: scale(0.99); }
+.hw-adv { background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--grad) border-box; border: 2px solid transparent; padding: 13px 15px; }
+.hw-level-title { font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+.hw-level-meta { color: var(--muted); font-size: 0.88rem; font-weight: 600; }
+.hw-level-note { color: var(--muted); font-size: 0.88rem; }
+.hw-task { margin-top: 12px; }
+.hw-task .task-title { margin-top: 0; }
+.hw-note { text-align: center; }
+.hw-result { text-align: center; }
+.hw-over { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); font-weight: 700; text-align: center; }
+@media (hover: hover) {
+  .hw-level:hover:not(:disabled) { border-color: var(--primary); }
+  .hw-adv:hover:not(:disabled) { border-color: transparent; }
+}
+@media (min-width: 1100px) {
+  .hw-levels { grid-template-columns: 1fr 1fr; }
+}

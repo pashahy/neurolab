@@ -9,6 +9,8 @@ export const LIMIT_TEXT = 'Сегодня отправлено слишком м
 export const HOLD_TEXT = {
   'unknown lesson': 'Это ПЗ ещё не появилось на сервере — работа сохранена и уйдёт позже',
   'lesson closed': 'ПЗ сейчас закрыто преподавателем — работа сохранена и уйдёт, когда его откроют',
+  // скрипт таблицы ещё без действия homeworkSubmit (ДЗ): работа ждёт в очереди, пока сервер не обновят
+  'unknown action': 'Сервер ещё не обновлён — ДЗ сохранено и уйдёт, когда его обновят',
 };
 export const holdText = reason => (Object.prototype.hasOwnProperty.call(HOLD_TEXT, reason) ? HOLD_TEXT[reason] : 'Сервер пока не принимает эту работу — она сохранена и уйдёт позже');
 
@@ -18,6 +20,9 @@ const REJECT_TEXT = {
   'unknown discipline': 'неизвестная дисциплина', 'bad lesson': 'неверный номер ПЗ', 'bad submittedAt': 'неверное время сдачи',
   'bad score': 'неверные баллы', 'bad max': 'неверные баллы', 'bad manualMax': 'неверные баллы',
   'bad variant': 'неверный вариант практики', 'bad json': 'повреждённые данные', 'unknown action': 'устаревшая версия сайта',
+  'bad v4': 'повреждённые данные этапов занятия', 'hw limit': 'попытки домашнего задания закончились',
+  'no homework': 'у этого занятия нет домашнего задания', 'bad homework': 'повреждённые данные домашнего задания',
+  'bad level': 'неверный уровень домашнего задания',
 };
 export const rejectText = error => (typeof error === 'string' && Object.prototype.hasOwnProperty.call(REJECT_TEXT, error)
   ? REJECT_TEXT[error] : `ошибка данных (${typeof error === 'string' && error ? error : 'без описания'})`);
@@ -54,10 +59,10 @@ export function errorLabel(kind, error) {
   if (kind === 'limit') return 'суточный лимит сервера';
   return '—';
 }
-// «ПЗ №N (дисциплина) · попыток отправки K · последняя ошибка: …»
+// «ПЗ №N (дисциплина) · попыток отправки K · последняя ошибка: …»; сдача ДЗ (d.hw) — «ДЗ к ПЗ №N …»
 export function diagLine(d) {
   const disc = typeof d.discipline === 'string' ? d.discipline.toUpperCase().replace('DUP', 'ДУП.') : '?';
-  return `ПЗ №${d.lesson} (${disc}) · попыток отправки ${d.attempts} · последняя ошибка: ${errorLabel(d.kind, d.error)}`;
+  return `${d.hw ? 'ДЗ к ПЗ' : 'ПЗ'} №${d.lesson} (${disc}) · попыток отправки ${d.attempts} · последняя ошибка: ${errorLabel(d.kind, d.error)}`;
 }
 
 // Что сказать студенту о причине: нет связи / сервер перегружен / сервер не смог принять работу (текст сервера как есть)

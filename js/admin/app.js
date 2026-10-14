@@ -7,6 +7,7 @@ import { renderJournal } from './journal.js';
 import { renderReview, renderWork } from './review.js';
 import { renderAccess } from './access.js';
 import { renderStats } from './stats.js';
+import { renderSummary } from './summary.js';
 import { renderSettings } from './settings.js';
 
 const TABS = [
@@ -15,11 +16,12 @@ const TABS = [
   { id: 'review', label: 'Проверка', render: renderReview },
   { id: 'access', label: 'Доступ', render: renderAccess },
   { id: 'stats', label: 'Статистика', render: renderStats },
+  { id: 'summary', label: 'Сводка', render: renderSummary },
   { id: 'settings', label: 'Настройки', render: renderSettings },
 ];
 const ADMIN_PASSWORD_MIN = 10;
 
-// Админ-панель: #/admin, #/admin/students|journal|review|access|stats|settings, #/admin/cards, #/admin/work.
+// Админ-панель: #/admin, #/admin/students|journal|review|access|stats|summary|settings, #/admin/cards, #/admin/work.
 // Не требует студенческой сессии; пароль администратора нигде не сохраняется, хранится только токен.
 export function renderAdmin(app, parts, query) {
   const my = app.routeId;
