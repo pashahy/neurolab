@@ -3,11 +3,11 @@
 export const PROGRESS_SYNC_MS = 120000;
 
 // syncProgress({force}) -> Promise<boolean>: true, если локальное состояние изменилось (экран стоит перерисовать).
-// force (вход) — без паузы. Отсчёт паузы не начинается, если ответа нет или он не использован: сбой сети, истёкшая
+// force (вход, собственная сдача) — без паузы и без проверки isBusy (идёт отправка работ студента — фоновый запрос не нужен). Отсчёт паузы не начинается, если ответа нет или он не использован: сбой сети, истёкшая
 // сессия (ещё и onAuth()), ответ отброшен из-за смены сессии. Старый сервер (null) и отказ сервера («no table») —
 // обычный отсчёт, локальное состояние не меняется. Ответ сливается только в раздел студента, для которого
 // запрашивался, и только если за время запроса сессия не сменилась.
-export function createProgressSync({ api, store, now = () => Date.now(), intervalMs = PROGRESS_SYNC_MS, onAuth = () => {} }) {
+export function createProgressSync({ api, store, now = () => Date.now(), intervalMs = PROGRESS_SYNC_MS, onAuth = () => {}, isBusy = () => false }) {
   const lastAt = Object.create(null); // studentId -> время последнего запроса
   let inflight = null; // { sid, token, promise }
   return function syncProgress({ force = false } = {}) {
@@ -16,6 +16,8 @@ export function createProgressSync({ api, store, now = () => Date.now(), interva
     const sid = s.student.id;
     const token = s.token;
     if (inflight && inflight.sid === sid && inflight.token === token) return inflight.promise;
+    // пока идёт отправка работ студента, фоновый запрос пропускаем (паузу не засчитываем); force — вход и собственная сдача
+    if (!force && isBusy()) return Promise.resolve(false);
     if (!force && lastAt[sid] !== undefined && now() - lastAt[sid] < intervalMs) return Promise.resolve(false);
     const started = now();
     lastAt[sid] = started;

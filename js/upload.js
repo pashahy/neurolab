@@ -17,6 +17,7 @@ export const UPLOAD_MSG = {
   offline: 'Нужен интернет, чтобы загрузить файл',
   noAnswer: 'Сервер не ответил, попробуйте ещё раз',
   failed: 'Не удалось загрузить файл, попробуйте ещё раз',
+  busy: 'Сервер занят — повторите через несколько секунд',
   limit: 'Слишком много загрузок за сегодня — попробуйте завтра',
   auth: 'Войдите снова, чтобы загрузить файл',
   unknownLesson: 'Этого ПЗ пока нет на сервере — загрузить файл нельзя. Попробуйте позже или сообщите преподавателю',
@@ -68,6 +69,7 @@ const SERVER_ERRORS = {
   'unknown lesson': UPLOAD_MSG.unknownLesson,
   'lesson closed': UPLOAD_MSG.lessonClosed,
   'no table': UPLOAD_MSG.noTable,
+  busy: UPLOAD_MSG.busy, // сервер не взял блокировку таблицы — ничего не записано, можно повторить
 };
 const serverError = code => (typeof code === 'string' && Object.prototype.hasOwnProperty.call(SERVER_ERRORS, code) ? SERVER_ERRORS[code] : UPLOAD_MSG.failed);
 
@@ -171,7 +173,7 @@ export async function checkStorage(api, fetchFn = (...a) => fetch(...a)) {
   let form;
   try { form = await api.adminCheckUpload(); } catch (e) {
     if (e && (e.auth || e.network)) throw e;
-    return { ok: false, message: e && e.message === 'storage off' ? CHECK_MSG.off : String((e && e.message) || 'Ошибка сервера') };
+    return { ok: false, message: e && e.message === 'storage off' ? CHECK_MSG.off : e && e.message === 'busy' ? UPLOAD_MSG.busy : String((e && e.message) || 'Ошибка сервера') };
   }
   const body = 'abcdefghijklmnopqrstuvwxyz'.charAt(Math.floor(Math.random() * 26)); // 1 байт
   const blob = new Blob([body], { type: 'text/plain' });

@@ -2,6 +2,9 @@ import { createStore } from './store.js';
 import { createSubmitter } from './submit.js';
 import { createApi } from './api.js';
 import { createProgressSync } from './progress-sync.js';
+import { createRefreshGate, createRatingLoader, watchSubmissions } from './refresh-gate.js';
+import { createAccountRefresh } from './account-refresh.js';
+import { liveCapable } from './submit-status.js';
 import { API_URL } from './config.js';
 import { h } from './util/dom.js';
 import { safeNext, expiryNext, identityChanged } from './nav.js';
@@ -15,7 +18,6 @@ import { renderRating } from './ui/rating.js';
 import { renderAdmin } from './admin/app.js';
 
 const store = createStore();
-const REFRESH_MS = 15000;
 const LOGIN_WAIT_MS = 10000; // сколько вход ждёт me, прежде чем открыть экран (обновление продолжится в фоне)
 const CACHED_WAIT_MS = 4000; // с сохранённым me проверка доступа на занятии ждёт сервер недолго
 const delay = ms => new Promise(r => setTimeout(r, ms));
@@ -32,8 +34,15 @@ const app = {
   submittedKey: null, // ключ занятия, работа по которому только что сдана (для возврата после истечения сессии)
 };
 app.submitter = createSubmitter({ store, url: API_URL, onAuthRequired: () => app.authExpired() });
+// Тяжёлые фоновые запросы (оценки, прогресс, рейтинг) — не чаще раза в минуту на студента; пока идёт отправка его работ
+// (запрос в полёте или ждёт повтор, не дольше 5 сбоев подряд) оценки и прогресс откладываются, чтобы сдаче досталась
+// мощность сервера. me (доступ к занятиям) обновляется всегда, с паузой 15 с.
+app.refreshGate = createRefreshGate();
+// старая копия submit.js из кэша телефона может не знать busy(): тогда фоновые запросы не откладываются
+const submitBusy = () => typeof app.submitter.busy === 'function' && app.submitter.busy();
 // прогресс с сервера (другие устройства): при входе и на главной и карте курса, не чаще раза в 2 минуты на студента
-app.syncProgress = createProgressSync({ api: app.api, store, onAuth: () => app.authExpired() });
+app.syncProgress = createProgressSync({ api: app.api, store, onAuth: () => app.authExpired(), isBusy: submitBusy });
+app.loadRating = createRatingLoader({ api: app.api, gate: app.refreshGate, getStudentId: () => store.studentId() }).load;
 
 const currentPath = () => (location.hash.replace(/^#/, '') || '/').split('?')[0];
 
@@ -49,41 +58,19 @@ app.authExpired = function authExpired() {
   app.go(`/login?next=${encodeURIComponent(next)}`);
 };
 
-// me + оценки; true, если данные изменились. Запрос в полёте привязан к токену:
-// после смены сессии (выход/вход другого студента) стартует новый, а ответ старого отбрасывается.
-let refreshing = null; // { token, promise }
-let lastRefresh = { token: null, at: 0 };
-app.refreshAccount = function refreshAccount({ force = false } = {}) {
-  if (!store.session()) return Promise.resolve(false);
-  const token = store.session().token;
-  if (refreshing && refreshing.token === token) return refreshing.promise;
-  if (!force && lastRefresh.token === token && Date.now() - lastRefresh.at < REFRESH_MS) return Promise.resolve(false);
-  lastRefresh = { token, at: Date.now() };
-  const same = () => !!store.session() && store.session().token === token;
-  const entry = { token, promise: null };
-  entry.promise = (async () => {
-    try {
-      const before = JSON.stringify([store.me(), store.grades(), store.profile()]);
-      const m = await app.api.me();
-      if (!same()) return false;
-      store.setSession({ token, student: m.student });
-      store.setMe({ student: m.student, access: m.access });
-      try {
-        const g = await app.api.myGrades();
-        if (same()) store.setGrades(g);
-      } catch (e) { if (e.auth) throw e; /* оценки подтянутся в следующий раз */ }
-      return same() && before !== JSON.stringify([store.me(), store.grades(), store.profile()]);
-    } catch (e) {
-      lastRefresh = { token: null, at: 0 }; // неудача не должна блокировать повторную попытку
-      if (e && e.auth && same()) app.authExpired();
-      return false; // нет сети — работаем с сохранёнными данными
-    } finally {
-      if (refreshing === entry) refreshing = null;
-    }
-  })();
-  refreshing = entry;
-  return entry.promise;
-};
+// me + оценки; true, если данные изменились (подробности и паузы — в account-refresh.js)
+app.refreshAccount = createAccountRefresh({ api: app.api, store, gate: app.refreshGate, isBusy: submitBusy, onAuth: () => app.authExpired() });
+
+// Собственная сдача студента принята: оценки, прогресс и рейтинг обновляем сразу (без пауз), когда отправка затихла
+function refreshAfterSubmit() {
+  const sid = store.studentId();
+  if (sid === null) return;
+  app.refreshGate.reset(sid);
+  Promise.all([app.refreshAccount({ force: true }), app.syncProgress({ force: true })]).then(([acc, prog]) => {
+    if (acc || prog) rerenderIfStill(app.routeId);
+  });
+}
+if (liveCapable(app.submitter)) watchSubmissions({ submitter: app.submitter, run: refreshAfterSubmit });
 
 // Доступ нельзя проверить без me. С сохранённым me ждём сервер не дольше maxWaitMs (дальше работаем с кэшем,
 // обновление идёт в фоне); без кэша ждём ответ полностью. false — проверить доступ не удалось.
@@ -104,7 +91,9 @@ app.finishLogin = async function finishLogin(r, next) {
   await Promise.race([Promise.all([app.refreshAccount({ force: true }), prog]), delay(LOGIN_WAIT_MS)]);
   // прогресс не успел к открытию экрана — первый экран после входа перерисуется один раз, когда он придёт (route)
   loginSync = synced ? null : { promise: prog, token: r.token };
-  flushUI();
+  // принудительный проход (не автоматический): очередь только что вошедшего студента не должна ждать чужой запрос,
+  // ещё идущий на общем телефоне; плашка очереди обновляется сама
+  app.submitter.flush();
   app.go(safeNext(next));
 };
 let loginSync = null; // { promise, token } — синхронизация прогресса при входе, ещё не дошедшая до экрана
@@ -126,9 +115,10 @@ function showError(e) {
 }
 
 // отправка очереди; если число неотправленных изменилось, экран (баннер на главной) перерисовывается
+// Автоматический повод (запуск, online, возврат на вкладку): проходы объединяются и не обгоняют расписание повторов
 function flushUI() {
   const before = app.submitter.pending();
-  return app.submitter.flush().then(() => {
+  return app.submitter.flush({ auto: true }).then(() => {
     if (app.submitter.pending() === before) return;
     const [a, , c] = currentPath().split('/').filter(Boolean);
     if (isDemo(a) || a === 'login' || a === 'admin' || (a === 'd' && c)) return;
@@ -232,11 +222,16 @@ window.addEventListener('storage', () => {
 });
 
 window.addEventListener('hashchange', route);
-window.addEventListener('online', () => { flushUI(); softRefresh(app.routeId, { force: true }); });
+// Возврат в сеть и на вкладку обновляют данные не принудительно: тяжёлые запросы подчиняются паузам и пропускаются,
+// пока идёт отправка работ. Повторы отправки идут по своему расписанию (автоматический проход его не обгоняет).
+// После возвращения сети отправка начинается через случайные 0–3 с: класс на одном Wi-Fi возвращается одновременно.
+window.addEventListener('online', () => {
+  setTimeout(() => { flushUI(); softRefresh(app.routeId); }, Math.floor(Math.random() * 3000));
+});
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   flushUI();
-  softRefresh(app.routeId, { force: true });
+  softRefresh(app.routeId);
 });
 route();
 flushUI();

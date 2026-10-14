@@ -8,7 +8,8 @@ export async function renderRating(app) {
   const box = h('div', { class: 'card' }, h('p', { class: 'loading' }, 'Загружаем рейтинг…'));
   add(app.root, h('a', { href: '#/', class: 'back' }, '← Главная'), h('h1', { class: 'display' }, '🏆 Рейтинг группы ', h('span', { class: 'nowrap' }, p.group)), box);
   try {
-    const r = await app.api.rating();
+    // не чаще раза в минуту на студента (кэш), после своей сдачи — заново; без loadRating (старая копия app.js) — как раньше
+    const r = await (typeof app.loadRating === 'function' ? app.loadRating() : app.api.rating());
     if (app.routeId !== my) return;
     if (!r.top.length) { box.replaceChildren(h('p', {}, 'В группе пока нет сданных работ — станьте первым!')); return; }
     box.replaceChildren(

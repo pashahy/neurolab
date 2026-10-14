@@ -2,8 +2,13 @@ import { h, add } from '../util/dom.js';
 import { COMPANY } from '../../content/story.js';
 
 export const NET_ERROR = 'Нет связи с сервером. Проверьте интернет';
-// ошибка сервера показывается как есть; сбой сети — понятным текстом
-export const errText = e => (e && e.network ? NET_ERROR : (e && e.message) || 'Не удалось выполнить запрос. Попробуйте ещё раз');
+// сервер не взял блокировку таблицы (ответ { error: 'busy', busy: true }): ничего не записано, действие можно повторить.
+// Строка продублирована в upload.js: между прежними модулями новые именованные импорты не вводим (кэш телефона бывает разнородным)
+export const BUSY_ERROR = 'Сервер занят — повторите через несколько секунд';
+// ошибка сервера показывается как есть; сбой сети и занятый сервер — понятным текстом
+export const errText = e => (e && e.network ? NET_ERROR
+  : e && (e.busy === true || e.message === 'busy') ? BUSY_ERROR
+    : (e && e.message) || 'Не удалось выполнить запрос. Попробуйте ещё раз');
 
 export function passwordField(label, { name, autocomplete }) {
   const input = h('input', { name, type: 'password', required: true, autocomplete, autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false' });

@@ -3,7 +3,7 @@ import { levelFor, BADGES } from '../gamification.js';
 import { loadCourse, flatLessons, courseAccess, deadlineInfo } from '../content.js';
 import { DISCIPLINES } from '../config.js';
 import { lessonKey } from '../store.js';
-import { LIMIT_TEXT, holdText } from '../submit.js';
+import { pendingBanner } from './pending-banner.js';
 import { coursePath, doneStreak, routeStop, pathInputs, progressCount } from './course-path.js';
 
 const plural = (n, [one, few, many]) => {
@@ -17,7 +17,6 @@ export async function renderHome(app) {
   const p = app.store.profile();
   const lvl = levelFor(st.xp);
   const pct = Math.round(lvl.progress * 100);
-  const pending = app.submitter.pending();
   const first = p.name.split(' ')[1] || p.name;
   const streak = h('div', { class: 'hero-streak' });
   const courses = h('div', { class: 'courses' });
@@ -34,12 +33,7 @@ export async function renderHome(app) {
         streak),
       h('section', { class: 'home-courses', 'aria-labelledby': 'my-courses' },
         h('h2', { class: 'sec-title', id: 'my-courses' }, 'Мои курсы'),
-        pending && app.submitter.limited() ? h('div', { class: 'card warn' },
-          h('p', {}, `⏳ Не отправлено работ: ${pending}. ${LIMIT_TEXT}.`)) : '',
-        pending && !app.submitter.limited() ? h('div', { class: 'card warn' },
-          h('p', {}, `⏳ Не отправлено работ: ${pending}. Они уйдут автоматически, когда появится интернет.`),
-          app.submitter.held().map(reason => h('p', { class: 'hint' }, `${holdText(reason)}.`)),
-          h('button', { class: 'btn small', type: 'button', onclick: async e => { e.target.disabled = true; await app.submitter.flush({ manual: true }); app.rerender(); } }, 'Отправить сейчас')) : '',
+        pendingBanner(app), // «N работ ждут отправки»: обновляется сама и пропадает, когда всё ушло
         courses)),
     h('section', { class: 'home-paths', 'aria-labelledby': 'course-path' },
       h('h2', { class: 'sec-title', id: 'course-path' }, 'Путь курса'),

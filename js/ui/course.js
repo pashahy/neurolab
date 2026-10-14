@@ -2,6 +2,7 @@ import { h, add } from '../util/dom.js';
 import { loadCourse, flatLessons, courseAccess, deadlineInfo, hasTeacherGrades } from '../content.js';
 import { lessonKey } from '../store.js';
 import { coursePath, routeStop, pathInputs, progressCount } from './course-path.js';
+import { pendingBanner } from './pending-banner.js';
 
 export async function renderCourse(app, d) {
   const my = app.routeId;
@@ -28,7 +29,7 @@ export async function renderCourse(app, d) {
   const num = d.slice(-2);
 
   const map = h('div', { class: 'course-map' });
-  add(app.root, h('div', { class: 'course-layout' },
+  add(app.root, pendingBanner(app), h('div', { class: 'course-layout' },
     h('aside', { class: 'course-head' },
       h('a', { href: '#/', class: 'back' }, '← Главная'),
       h('div', { class: 'course-head-row' },

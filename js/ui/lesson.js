@@ -9,6 +9,7 @@ import { identityChanged } from '../nav.js';
 import { repairDraft, answerWriter } from '../draft.js';
 import { xpGain, levelFor, newBadges, BADGES } from '../gamification.js';
 import { buildSubmission, LIMIT_TEXT, holdText, rejectText } from '../submit.js';
+import { queuedLive } from './queued-live.js';
 import { uploadFile } from '../upload.js';
 import { CHARACTERS } from '../../content/story.js';
 
@@ -497,22 +498,27 @@ export async function renderLesson(app, discipline, n) {
       submitBtn.textContent = 'Отправляем…';
       const { sent, limit, hold, rejected } = await app.submitter.submit(sub);
       if (app.routeId !== my) return; // например, сессия истекла: сдача в очереди, студента ждёт экран входа
-      view.replaceChildren(done({ sent, limit, hold, rejected, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max }));
+      view.replaceChildren(done({ sent, limit, hold, rejected, subId: sub.id, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max }));
       window.scrollTo(0, 0);
     }
   }
 
-  function done({ sent, limit, hold, rejected, gain, badges, levelUp, perfect }) {
+  function done({ sent, limit, hold, rejected, subId, gain, badges, levelUp, perfect }) {
     // rejected — сервер отказал (повреждённая сдача): никакого «сдано», только причина и просьба сообщить преподавателю
     const failed = rejected !== undefined;
+    // работа осталась в очереди из-за сбоя (сеть, таймаут, ошибка сервера, busy): показываем живой статус повторов
+    const queued = !sent && !failed && !limit && !hold;
+    const icon = h('div', { class: 'done-icon', 'aria-hidden': 'true' }, sent ? '🎉' : failed ? '⚠️' : '💾');
+    const title = h('h1', {}, sent ? 'Работа сдана!' : failed ? 'Работа не принята' : 'Работа сохранена на телефоне');
+    const text = h('p', { role: failed ? 'alert' : null }, sent ? 'Результат уже в таблице преподавателя.'
+      : failed ? `Сервер не принял работу: ${rejectText(rejected)} — сообщите преподавателю.`
+        : limit ? `${LIMIT_TEXT}. Не очищайте данные браузера.`
+          : hold ? `${holdText(hold)}. Не очищайте данные браузера.`
+            : 'Работа сохранена на телефоне и отправится сама.');
+    const live = queued ? queuedLive(app, { id: subId, parts: { icon, title, text } }) : null;
     const box = h('div', { class: 'done' },
-      h('div', { class: 'done-icon', 'aria-hidden': 'true' }, sent ? '🎉' : failed ? '⚠️' : '💾'),
-      h('h1', {}, sent ? 'Работа сдана!' : failed ? 'Работа не принята' : 'Работа сохранена на телефоне'),
-      h('p', { role: failed ? 'alert' : null }, sent ? 'Результат уже в таблице преподавателя.'
-        : failed ? `Сервер не принял работу: ${rejectText(rejected)} — сообщите преподавателю.`
-          : limit ? `${LIMIT_TEXT}. Не очищайте данные браузера.`
-            : hold ? `${holdText(hold)}. Не очищайте данные браузера.`
-              : 'Сейчас нет связи с сервером. Работа отправится автоматически, когда появится интернет — просто откройте сайт ещё раз. Не очищайте данные браузера.'),
+      icon, title, text,
+      live ? live.nodes : '',
       deadline && deadline.overdue ? h('p', { class: 'hint' }, 'Работа сдана после срока — преподаватель увидит отметку.') : '',
       h('div', { class: 'xp-gain' }, gain ? `+${gain} XP` : 'XP начисляются за улучшение результата'),
       levelUp ? h('div', { class: 'card level-up' }, `⬆ Новый уровень: ${levelUp.title}!`) : '',

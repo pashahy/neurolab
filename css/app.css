@@ -77,6 +77,19 @@ main { max-width: 720px; margin: 0 auto; padding: 16px 16px calc(40px + env(safe
 .site-foot a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; color: var(--muted); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; margin: 0 0 16px; box-shadow: var(--shadow); }
 .card.warn { background: var(--warn-soft); border-color: transparent; }
+/* плашка «N работ ждут отправки» (главная, карта курса) и живой статус отправки на экране «Работа сохранена» */
+.pending-banner p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.pending-banner .pending-title { font-weight: 700; }
+.pending-banner .btn { max-width: 100%; }
+.pending-diag { margin-top: 10px; font-size: 0.85rem; color: var(--muted); }
+.pending-diag summary { padding: 12px 0; cursor: pointer; }
+.pending-diag-list { margin: 4px 0 0; padding-left: 18px; }
+.pending-diag-list li { margin: 0 0 6px; overflow-wrap: anywhere; }
+.send-status { margin: 12px 0; padding: 12px 14px; border-radius: 12px; background: var(--warn-soft); color: var(--text); text-align: left; overflow-wrap: anywhere; }
+.send-status p { margin: 0; }
+.send-status .hint { margin-top: 4px; }
+.send-status.sent { background: var(--ok-soft); color: var(--ok); font-weight: 700; text-align: center; }
+.send-status.rejected { background: var(--bad-soft); color: var(--bad); }
 .muted, .hint { color: var(--muted); }
 .nowrap { white-space: nowrap; }
 .hint { font-size: 0.9rem; margin: 0.4rem 0; }

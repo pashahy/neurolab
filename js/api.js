@@ -15,6 +15,7 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
     if (!data.ok) {
       const err = new Error(data.error || 'Ошибка сервера');
       if (data.auth) err.auth = true;
+      if (data.busy === true) err.busy = true; // сервер занят (блокировка таблицы): экраны показывают понятный текст
       throw err;
     }
     return data;
