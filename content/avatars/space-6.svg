@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Комета">
+<title>Комета</title>
+<circle cx="48" cy="48" r="48" fill="#1e3a8a"/>
+<circle cx="78" cy="20" r="1.5" fill="#bfdbfe"/><circle cx="18" cy="24" r="1.5" fill="#bfdbfe"/><circle cx="24" cy="74" r="2" fill="#bfdbfe"/><circle cx="66" cy="80" r="1.2" fill="#bfdbfe"/><path d="M62 34L14 78l10-30zM62 34L22 82l24-12z" fill="#93c5fd" opacity=".75"/><circle cx="66" cy="32" r="14" fill="#fbbf24"/><circle cx="62" cy="28" r="4" fill="#fde68a"/>
+</svg>

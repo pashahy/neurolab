@@ -273,6 +273,7 @@ export async function renderLesson(app, discipline, n) {
     // для задания file: загрузка в хранилище от имени студента; в демо-занятии загрузки нет
     const extra = {
       demo: preview,
+      store: preview ? null : app.store, // для «Открыть в песочнице» в заданиях python/terminal
       setBusy: b => { busy = !!b; if (!D.locked[t.id]) drawFooter(); },
       upload: preview ? null : file => uploadFile(app.api, { discipline, lesson: lesson.number, taskId: t.id, file, accept: t.accept, maxMb: t.maxMb }, (...a) => fetch(...a)),
     };

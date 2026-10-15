@@ -93,5 +93,6 @@ export async function renderHome(app) {
       }))),
     h('nav', { class: 'home-links', 'aria-label': 'Ещё' },
       h('a', { class: 'btn', href: '#/rating' }, '🏆 Рейтинг группы'),
+      h('a', { class: 'btn', href: '#/sandbox' }, '🧪 Песочница'),
       h('a', { class: 'btn ghost', href: '#/profile' }, `👤 ${p.name}, ${p.group}`)));
 }

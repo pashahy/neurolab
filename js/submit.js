@@ -114,16 +114,21 @@ export function createSubmitter({
   async function send(item) {
     if (!url) throw new Error('Адрес сервера не настроен');
     const hw = item.kind === 'hw';
-    const data = await postJson(fetchFn, url, { action: hw ? 'homeworkSubmit' : 'submit', token: getToken(), submission: item }, timeoutMs);
+    const sbx = item.kind === 'sbx';
+    // песочница: действие sandboxSolve, работа лежит в поле solution
+    const body = sbx
+      ? { action: 'sandboxSolve', token: getToken(), solution: item }
+      : { action: hw ? 'homeworkSubmit' : 'submit', token: getToken(), submission: item };
+    const data = await postJson(fetchFn, url, body, timeoutMs);
     if (!data || typeof data !== 'object' || Array.isArray(data)) { // null, число, строка, массив — не ответ нашего сервера
       const bad = new Error(BAD_REPLY_TEXT);
       bad.kind = 'server';
       throw bad;
     }
     if (data.auth) return { kind: 'auth' };
-    if (data.ok === true) return { kind: 'ok' };
+    if (data.ok === true) return sbx ? { kind: 'ok', result: data } : { kind: 'ok' };
     // сервер без homeworkSubmit (скрипт таблицы ещё не обновлён): ДЗ не теряем, оставляем в очереди как отложенное
-    if (hw && data.error === 'unknown action') return { kind: 'hold', error: data.error };
+    if ((hw || sbx) && data.error === 'unknown action') return { kind: 'hold', error: data.error };
     if (data.reject) return { kind: 'reject', error: data.error };
     if (data.limit) return { kind: 'limit' };
     if (data.hold) return { kind: 'hold', error: data.error };
@@ -201,7 +206,7 @@ export function createSubmitter({
           return;
         }
         if (r.kind === 'reject') { rejected.set(item.id, r.error); settle(item.id, { rejected: r.error }); } // повреждённая сдача: убираем, но «сдано» не говорим
-        else { sentCount++; settle(item.id, { sent: true }); }
+        else { sentCount++; settle(item.id, r.result ? { sent: true, result: r.result } : { sent: true }); } // итог серверa песочницы — тому, кто ждёт
         tries.delete(item.id);
         store.dequeue(item.id);
         emit();
@@ -294,7 +299,7 @@ export function createSubmitter({
         const t = tries.get(q.id);
         const kind = held.has(q.id) ? 'hold' : lim ? 'limit' : t ? t.kind : null;
         const error = held.has(q.id) ? held.get(q.id) : t ? t.error : '';
-        return { id: q.id, discipline: q.discipline, lesson: q.lesson, hw: q.kind === 'hw', attempts: t ? t.attempts : 0, kind, error };
+        return { id: q.id, discipline: q.discipline, lesson: q.lesson, hw: q.kind === 'hw', sbx: q.kind === 'sbx' ? (/^term/.test(String(q.taskId)) ? 'term' : 'py') : null, attempts: t ? t.attempts : 0, kind, error };
       });
     },
     // последняя ошибка именно этой работы

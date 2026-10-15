@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Пёс">
+<title>Пёс</title>
+<circle cx="48" cy="48" r="48" fill="#dcfce7"/>
+<ellipse cx="25" cy="52" rx="10" ry="20" fill="#78350f" transform="rotate(10 25 52)"/><ellipse cx="71" cy="52" rx="10" ry="20" fill="#78350f" transform="rotate(-10 71 52)"/><circle cx="48" cy="50" r="24" fill="#d6a46b"/><ellipse cx="48" cy="60" rx="14" ry="10" fill="#f5deb3"/><circle cx="38" cy="46" r="3.5" fill="#1d1828"/><circle cx="58" cy="46" r="3.5" fill="#1d1828"/><ellipse cx="48" cy="56" rx="5" ry="3.5" fill="#1d1828"/><path d="M48 60v4M42 66q6 4 12 0" stroke="#1d1828" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

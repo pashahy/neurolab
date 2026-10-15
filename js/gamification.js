@@ -26,7 +26,9 @@ export function xpGain(prev, result) {
 }
 
 const done = s => Object.keys(s.progress);
-const perfectType = type => (s, c) => !!c.perfectTypes?.includes(type);
+// статистика песочницы лежит в черновиках студента (js/sandbox/storage.js, ключ sandbox:stats)
+const sbxStat = (s, k) => { const v = s.drafts && s.drafts['sandbox:stats']; return v && Number(v[k]) || 0; };
+const perfectType =type => (s, c) => !!c.perfectTypes?.includes(type);
 
 export const BADGES = [
   { id: 'first', icon: '🎫', title: 'Первый рабочий день', desc: 'Сдать первое занятие', test: s => done(s).length >= 1 },
@@ -41,6 +43,11 @@ export const BADGES = [
   { id: 'coder', icon: '🐍', title: 'Питонист', desc: 'Пройти все тесты Python-задания', test: perfectType('python') },
   { id: 'terminal', icon: '🌱', title: 'Повелитель терминала', desc: 'Выполнить все цели в тренажёре терминала', test: perfectType('terminal') },
   { id: 'bug', icon: '🐞', title: 'Зоркий глаз', desc: 'Найти все ошибки в задании «найди ошибку»', test: perfectType('hotspot') },
+  { id: 'sbx-first', icon: '🧪', title: 'Первая задача дня', desc: 'Решить задачу дня в песочнице', test: s => sbxStat(s, 'solved') >= 1 },
+  { id: 'sbx-streak3', icon: '🔥', title: 'Серия 3', desc: 'Решать задачи дня 3 дня подряд', test: s => sbxStat(s, 'bestStreak') >= 3 },
+  { id: 'sbx-streak7', icon: '⚡', title: 'Серия 7', desc: 'Решать задачи дня 7 дней подряд', test: s => sbxStat(s, 'bestStreak') >= 7 },
+  { id: 'sbx-streak14', icon: '🌋', title: 'Серия 14', desc: 'Решать задачи дня 14 дней подряд', test: s => sbxStat(s, 'bestStreak') >= 14 },
+  { id: 'sbx-star10', icon: '⭐', title: 'Звёздный', desc: 'Решить 10 задач со звёздочкой', test: s => sbxStat(s, 'starSolved') >= 10 },
 ];
 
 export function newBadges(state, ctx = {}) {

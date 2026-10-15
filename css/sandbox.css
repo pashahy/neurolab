@@ -1,0 +1,75 @@
+/* Песочница: хаб и панель задачи дня. Токены — из app.css. */
+.sbx-hub { display: grid; gap: 14px; }
+.sbx-streak { background: var(--grad-soft); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px 18px; }
+.sbx-streak-main { font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+.sbx-streak-freeze { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+.sbx-disc-title { font-size: 1.05rem; margin: 10px 0 0; }
+.sbx-cards { display: grid; gap: 12px; margin-top: 8px; }
+@media (min-width: 560px) { .sbx-cards { grid-template-columns: 1fr 1fr; } }
+.sbx-card { display: block; min-height: 44px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow); color: var(--text); text-decoration: none; transition: border-color 0.18s var(--ease), transform 0.15s var(--ease); }
+a.sbx-card:active { transform: scale(0.99); }
+a.sbx-card:hover, a.sbx-card:focus-visible { border-color: var(--primary); }
+.sbx-card.closed, .sbx-card.none { background: var(--surface-2); box-shadow: none; }
+.sbx-card.solved { border-color: var(--ok); }
+.sbx-card-kind { font-weight: 700; color: var(--muted); font-size: 0.9rem; }
+.sbx-card-title { font-weight: 700; margin-top: 4px; overflow-wrap: anywhere; }
+.sbx-card-note { margin: 6px 0 0; color: var(--muted); font-size: 0.92rem; }
+.sbx-card-note.ok { color: var(--ok); font-weight: 600; }
+.sbx-tools { display: grid; gap: 10px; margin-top: 8px; }
+@media (min-width: 560px) { .sbx-tools { grid-template-columns: 1fr 1fr; } }
+
+.sbx-daily { position: relative; overflow: hidden; }
+.sbx-daily-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.sbx-pill { background: var(--primary-soft); color: var(--primary); border-radius: var(--radius-pill); padding: 4px 12px; font-weight: 700; font-size: 0.85rem; }
+.sbx-star, .sbx-pts { font-weight: 700; font-size: 0.9rem; }
+.sbx-daily-title { margin: 10px 0 6px; font-size: 1.15rem; overflow-wrap: anywhere; }
+.sbx-task-text { overflow-wrap: anywhere; }
+.sbx-task-text pre { max-width: 100%; overflow-x: auto; }
+.sbx-result { margin-top: 10px; }
+.sbx-result.fail, .sbx-result.rejected { color: var(--bad); }
+.sbx-result.queued, .sbx-result.held, .sbx-result.wait { color: var(--muted); }
+.sbx-ok-title { font-weight: 700; font-size: 1.15rem; margin: 0; color: var(--ok); }
+.sbx-points { font-family: var(--font-display); font-size: 1.8rem; font-weight: 800; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.sbx-bonus { font-weight: 600; margin: 4px 0; }
+.sbx-flame { display: inline-block; font-weight: 700; margin: 4px 0; }
+.sbx-flame.pop { animation: sbx-pop 0.5s var(--ease); }
+@keyframes sbx-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.sbx-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* Инструменты: Python и терминал */
+.sbx-tool { display: grid; gap: 12px; min-width: 0; animation: sbx-in 0.22s var(--ease); }
+.sbx-tool > * { min-width: 0; }
+@keyframes sbx-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sbx-tool .row { margin: 0; }
+.sbx-tool .code-editor { width: 100%; max-width: 100%; box-sizing: border-box; }
+.sbx-tool .py-out { margin: 0; max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sbx-tool .py-out.err { color: var(--bad); }
+.sbx-tool .terminal { max-width: 100%; box-sizing: border-box; }
+.sbx-tool .term-screen pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sbx-pkg[aria-pressed="true"] { border-color: var(--ok); color: var(--ok); }
+.sbx-stdin-box summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--muted); }
+.sbx-stdin { width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 0.9rem; }
+.sbx-run { height: 4px; border-radius: 2px; background: var(--primary-soft); overflow: hidden; position: relative; }
+.sbx-run[hidden] { display: none; }
+.sbx-run::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 2px; background: var(--grad); animation: sbx-run 1s var(--ease) infinite; }
+@keyframes sbx-run { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.open-sbx { white-space: normal; }
+@media (prefers-reduced-motion: reduce) {
+  .sbx-flame.pop { animation: none; }
+  .sbx-card { transition: none; }
+  .sbx-confetti { display: none; }
+  .sbx-tool { animation: none; }
+  .sbx-run::after { animation: none; width: 100%; opacity: 0.5; }
+}
+
+/* Профиль: выбор аватара (сетка 4x6, кнопки >= 44 px) */
+.avatar-card { margin: 12px 0; }
+.avatar-title { font-size: 1.05rem; margin: 0 0 8px; }
+.avatar-cur { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.avatar-cur .hint { margin: 0; }
+.avatar-big { width: 72px; height: 72px; border-radius: 50%; flex: none; }
+.avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.avatar-opt { min-width: 44px; min-height: 44px; aspect-ratio: 1; padding: 4px; border-radius: 50%; border: 2px solid transparent; background: var(--surface-2); cursor: pointer; touch-action: manipulation; display: flex; align-items: center; justify-content: center; }
+.avatar-opt img { width: 100%; height: 100%; border-radius: 50%; display: block; }
+.avatar-opt[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.avatar-opt:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }

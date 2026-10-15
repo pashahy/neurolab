@@ -15,6 +15,7 @@ import { renderHome } from './ui/home.js';
 import { renderCourse } from './ui/course.js';
 import { renderLesson } from './ui/lesson.js';
 import { renderRating } from './ui/rating.js';
+import { renderSandbox } from './ui/sandbox.js';
 import { renderAdmin } from './admin/app.js';
 
 const store = createStore();
@@ -166,9 +167,9 @@ function route() {
   document.body.classList.toggle('no-orbs', a === 'admin'); // без светящихся пятен на экранах админ-панели
   const lessonRoute = a === 'd' && b && c;
   // главная и карта курса: на широком экране контейнер до 1200 px
-  app.root.classList.toggle('wide', !lessonRoute && !isDemo(a) && !['login', 'admin', 'rating', 'profile'].includes(a));
+  app.root.classList.toggle('wide', !lessonRoute && !isDemo(a) && !['login', 'admin', 'rating', 'profile', 'sandbox'].includes(a));
   window.scrollTo(0, 0);
-  const needsMe = a !== 'login' && !isDemo(a) && a !== 'rating' && a !== 'profile'; // главная, карта курса, занятие
+  const needsMe = a !== 'login' && !isDemo(a) && a !== 'rating' && a !== 'profile' && a !== 'sandbox'; // главная, карта курса, занятие
   const render = () => {
     if (a === 'd' && b && c) return renderLesson(app, b, Number(c));
     if (a === 'd' && b) return renderCourse(app, b);
@@ -179,6 +180,7 @@ function route() {
   else if (a === 'login') job = renderLogin(app, { next: safeNext(query.get('next')) });
   else if (isDemo(a)) job = renderLesson(app, a, 0); // демо доступно без входа
   else if (a === 'rating') job = renderRating(app);
+  else if (a === 'sandbox') job = renderSandbox(app, [b, c].filter(Boolean), query);
   else if (a === 'profile') job = renderProfile(app);
   else if (!lessonRoute && store.me()) { job = render(); } // главная и карта: показываем сохранённое, обновляем в фоне
   else job = gated(id, lessonRoute, render);

@@ -62,6 +62,7 @@ export function errorLabel(kind, error) {
 // «ПЗ №N (дисциплина) · попыток отправки K · последняя ошибка: …»; сдача ДЗ (d.hw) — «ДЗ к ПЗ №N …»
 export function diagLine(d) {
   const disc = typeof d.discipline === 'string' ? d.discipline.toUpperCase().replace('DUP', 'ДУП.') : '?';
+  if (d.sbx) return `Задача дня (${d.sbx === 'term' ? 'терминал' : 'Python'}) · попыток отправки ${d.attempts} · последняя ошибка: ${errorLabel(d.kind, d.error)}`;
   return `${d.hw ? 'ДЗ к ПЗ' : 'ПЗ'} №${d.lesson} (${disc}) · попыток отправки ${d.attempts} · последняя ошибка: ${errorLabel(d.kind, d.error)}`;
 }
 

@@ -20,6 +20,10 @@ ready.then(
 self.onmessage = async ({ data }) => {
   try {
     const py = await ready;
+    if (Array.isArray(data.packages) && data.packages.length) {
+      await py.loadPackage(data.packages);
+      self.postMessage({ type: 'packages', id: data.id });
+    }
     py.globals.set('__job', JSON.stringify({ code: data.code, runs: data.runs }));
     const res = py.runPython('run_all_json(__job)');
     self.postMessage({ id: data.id, results: JSON.parse(res) });

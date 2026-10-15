@@ -1,4 +1,5 @@
 import { h, add } from '../util/dom.js';
+import { renderHall } from './hall.js';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -16,7 +17,8 @@ export async function renderRating(app) {
       h('ol', { class: 'rating' }, r.top.map(x => h('li', { class: x.me ? 'me' : '' },
         h('span', { class: 'place' }, MEDALS[x.place - 1] || String(x.place)), h('span', { class: 'name' }, x.name), h('span', { class: 'xp' }, `${x.xp} XP`)))),
       r.me ? h('p', { class: 'my-place' }, `Ваше место: ${r.me.place} из ${r.total} · ${r.me.xp} XP`) : h('p', { class: 'hint' }, 'Сдайте первую работу, чтобы попасть в рейтинг.'),
-      h('p', { class: 'hint' }, 'Показаны первые пять мест. Учитывается лучшая попытка каждого занятия.'));
+      h('p', { class: 'hint' }, 'Показаны первые пять мест. Учитывается лучшая попытка каждого занятия.'),
+      renderHall(r.hall));
   } catch (e) {
     if (app.routeId !== my) return;
     if (e && e.auth) { app.authExpired(); return; }

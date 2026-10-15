@@ -76,7 +76,9 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
     logout: () => call('logout'),
     rating: async () => {
       const d = await call('rating');
-      return { top: d.top, me: d.me, total: d.total };
+      const out = { top: d.top, me: d.me, total: d.total };
+      if (d.hall !== undefined) out.hall = d.hall; // зал славы песочницы (сервер без него — поля нет)
+      return out;
     },
     myGrades,
     // прогресс студента с сервера {ok, studentId, progress, xp, days}; старый сервер без myProgress — null
