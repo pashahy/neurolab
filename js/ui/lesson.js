@@ -17,6 +17,7 @@ import { CHARACTERS } from '../../content/story.js';
 import { stageLabel, isAdv, practiceV4, advIntroNeeded, hasUnseenRules, hasHomework } from '../lesson-v4.js';
 import { introV4, goalV4, warmupV4, safetyV4, reflectV4, criteriaCard, advIntroV4, markCard, groupCommentCard } from './lesson-v4.js';
 import { homeworkV4, homeworkChooser } from './homework.js';
+import { startLivePulse, stageOf, scoreOf } from '../live-pulse.js';
 
 export async function renderLesson(app, discipline, n) {
   const my = app.routeId;
@@ -599,6 +600,7 @@ export async function renderLesson(app, discipline, n) {
     submitBtn.textContent = 'Отправляем…';
     const { sent, limit, hold, rejected } = await app.submitter.submit(sub);
     if (app.routeId !== my) return; // например, сессия истекла: сдача в очереди, студента ждёт экран входа
+    if (sent && pulse) { submittedOk = true; pulse.kick(); } // доска: сервер принял сдачу → этап «сдал»
     view.replaceChildren(done({ sent, limit, hold, rejected, subId: sub.id, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max, grade }));
     window.scrollTo(0, 0);
   }
@@ -648,6 +650,21 @@ export async function renderLesson(app, discipline, n) {
       h('a', { class: 'btn ghost big', href: '#/' }, 'На главную'));
     if (!failed && (perfect || levelUp || badges.length)) setTimeout(() => celebrate(box), 50);
     return box;
+  }
+
+  // Пульс для доски преподавателя (v4, студенческая сессия): этап, баллы, уход со страницы. Сам останавливается, когда экран сменился.
+  let submittedOk = false, pulse = null;
+  if (v4 && !preview && app.store.session()) {
+    submittedOk = app.store.progress(key) != null; // сдано раньше: сразу «сдал»
+    pulse = startLivePulse({
+      api: app.api, d: discipline, n, active: () => app.routeId === my && !evicted,
+      getState: () => {
+        if (!submittedOk) return { stage: stageOf(lesson, draft), ...scoreOf(lesson, draft) };
+        const p = app.store.progress(key);
+        const s = p && Number.isFinite(p.best) && Number.isFinite(p.max) ? { score: p.best, max: p.max, pc: draft.variant === 'pc' } : scoreOf(lesson, draft);
+        return { stage: 'done', ...s };
+      },
+    });
   }
 
   show();

@@ -9,6 +9,8 @@ import { renderAccess } from './access.js';
 import { renderStats } from './stats.js';
 import { renderSummary } from './summary.js';
 import { renderSettings } from './settings.js';
+import { renderBoard } from './board.js';
+import { renderLive } from './live.js';
 
 const TABS = [
   { id: 'students', label: 'Студенты', render: renderStudents },
@@ -21,7 +23,7 @@ const TABS = [
 ];
 const ADMIN_PASSWORD_MIN = 10;
 
-// Админ-панель: #/admin, #/admin/students|journal|review|access|stats|summary|settings, #/admin/cards, #/admin/work.
+// Админ-панель: #/admin, #/admin/students|journal|review|access|stats|summary|settings, #/admin/cards, #/admin/work, #/admin/live/<d>/<n>, #/admin/board/<d>/<n> (доска без шапки).
 // Не требует студенческой сессии; пароль администратора нигде не сохраняется, хранится только токен.
 export function renderAdmin(app, parts, query) {
   const my = app.routeId;
@@ -33,7 +35,7 @@ export function renderAdmin(app, parts, query) {
 
   let groupsPromise = null;
   const ctx = {
-    app, query, alive,
+    app, query, alive, parts,
     // запрос от имени администратора; при {auth:true} токен стирается и открывается форма входа
     call: (action, body) => ctx.guard(() => app.api.admin(action, body || {})),
     // то же для готовых методов api (api.adminFileUrl и т. п.): job() -> Promise
@@ -70,7 +72,9 @@ export function renderAdmin(app, parts, query) {
   const extra = {
     cards: { id: 'students', render: renderCards },
     work: { id: query.get('from') === 'review' ? 'review' : 'journal', render: renderWork },
+    live: { id: 'summary', render: renderLive },
   };
+  if (sub === 'board') return renderBoard(ctx); // полноэкранная доска: без шапки и вкладок админки
   const page = TABS.find(t => t.id === sub) || (Object.prototype.hasOwnProperty.call(extra, sub) ? extra[sub] : null);
   if (!page) { location.replace('#/admin/students'); return; }
 

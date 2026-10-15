@@ -229,7 +229,9 @@ export async function renderSummary(ctx, main) {
     h('div', { class: 'tools-row' },
       h('label', { class: 'field inline' }, h('span', {}, 'Группа'), select(groups.map(g => ({ value: g, label: g })), group, v => go(v, disc, n))),
       h('label', { class: 'field inline' }, h('span', {}, 'Дисциплина'), select(DISC.map(x => ({ value: x.id, label: x.code })), disc, v => go(group, v, ''))),
-      h('label', { class: 'field inline' }, h('span', {}, 'ПЗ'), select(lessons.map(l => ({ value: String(l.n), label: `№${l.n}` })), String(n), v => go(group, disc, v), { 'aria-label': 'Практическое занятие' }))));
+      h('label', { class: 'field inline' }, h('span', {}, 'ПЗ'), select(lessons.map(l => ({ value: String(l.n), label: `№${l.n}` })), String(n), v => go(group, disc, v), { 'aria-label': 'Практическое занятие' })),
+      h('a', { class: 'btn small', href: `#${hashQuery(`/admin/board/${disc}/${n}`, { group })}`, target: '_blank', rel: 'noopener' }, '📺 Доска'),
+      h('a', { class: 'btn small', href: `#${hashQuery(`/admin/live/${disc}/${n}`, { group })}` }, 'Мой экран')));
   const body = h('div', {}, loading('Собираем сводку…'));
   main.replaceChildren(bar, defaultError ? h('p', { class: 'error', role: 'alert' }, defaultError) : '', body);
   const meta = lessons.find(l => l.n === n);
