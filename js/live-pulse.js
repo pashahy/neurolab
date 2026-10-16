@@ -53,7 +53,7 @@ export function createAwayTracker(storage, key, now = Date.now) {
 // Запускает пульс. getState() → { stage, score, max, pc }. active() — экран ещё на месте (иначе пульс сам останавливается).
 // Возвращает stop(); у него есть kick() — отправить пульс сразу (после сдачи, когда этап стал 'done').
 export function startLivePulse({
-  api, d, n, getState, active = () => true,
+  api, d, n, getState, active = () => true, onState = null,
   doc = typeof document !== 'undefined' ? document : null, win = typeof window !== 'undefined' ? window : null,
   now = Date.now, setTimer = (f, ms) => setTimeout(f, ms), clearTimer = id => clearTimeout(id),
   storage = (() => { try { return globalThis.localStorage; } catch { return null; } })(),
@@ -75,10 +75,14 @@ export function startLivePulse({
         idle: clampInt((now() - lastAct) / 1000, MAX_IDLE_S),
         score: clampInt(s.score, MAX_SCORE), max: clampInt(s.max, MAX_SCORE), pc: !!s.pc, away: away.snapshot(),
       };
+      if (s.paste !== undefined) body.paste = clampInt(s.paste, 100000); // B3: сумма строк вставок (только «Моему экрану»)
       body.score = Math.min(body.score, body.max); // контракт сервера: score <= max (best из прогресса может быть больше max другого варианта)
     } catch { schedule(); return; }
     Promise.resolve().then(() => api.call('liveState', body)).then(
-      res => { board = !!(res && res.board); },
+      res => {
+        board = !!(res && res.board);
+        if (onState) { try { onState(res); } catch { /* панель вопроса не должна ломать пульс */ } } // B4: item/answered для панели «Вопрос с доски»
+      },
       () => { /* офлайн или сервер недоступен: молча */ },
     ).then(() => { if (!stopped) schedule(); });
     schedule();

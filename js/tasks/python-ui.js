@@ -1,5 +1,6 @@
 // Общие части Python-заданий и песочницы: редактор кода (с панелью символов) и блок вывода.
 import { h } from '../util/dom.js';
+import { handlePaste } from '../signals-v4.js';
 
 export const PY_KEYS = ['⇥', ':', '(', ')', '"', "'", '=', '[', ']', '{', '}', '+', '-', '*', '/', '%', '<', '>', '#', '_', ','];
 export const NO_OUTPUT_TEXT = '(программа ничего не вывела)';
@@ -23,10 +24,11 @@ export function outputText(r) {
 
 // Редактор: панель символов (если не locked) и textarea.
 // → { el, ta, get(), set(v) } ; onInput(value) вызывается на каждое изменение, set() её не вызывает
-export function pyEditor({ value = '', onInput, locked = false, keys = true } = {}) {
+export function pyEditor({ value = '', onInput, onPaste, locked = false, keys = true } = {}) {
   const rowsFor = v => Math.max(8, String(v).split('\n').length + 2);
   const ta = h('textarea', { class: 'code-editor', rows: rowsFor(value), spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off', disabled: locked, 'aria-label': 'Код на Python' }, value);
   ta.addEventListener('input', () => { if (onInput) onInput(ta.value); });
+  if (onPaste) ta.addEventListener('paste', e => handlePaste(e, onPaste)); // только считаем строки, вставку не запрещаем (сигнал B3)
   ta.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); insertAtCursor(ta, '    '); } });
   const bar = locked || !keys ? '' : h('div', { class: 'keybar', 'aria-label': 'Символы для кода' }, PY_KEYS.map(k => h('button', {
     type: 'button', class: 'key', onpointerdown: e => e.preventDefault(), onclick: () => insertAtCursor(ta, k === '⇥' ? '    ' : k),

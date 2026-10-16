@@ -5,7 +5,9 @@ import { loadLesson } from '../content.js';
 import { allTasks, hasVariants, inferVariant } from '../lesson-model.js';
 import { errText } from '../ui/login.js';
 import { discCode, select, fmtTime, hashQuery, loading, loadError, emptyBox } from './common.js';
-import { workHref } from './journal.js';
+import { reviewHref } from './review-team.js';
+import { workSignals, SIGNALS_NOTE } from './signals-view.js';
+import { defenseScoreText } from './board-defense.js';
 
 const own = (o, k) => o != null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
 const TYPE_LABEL = {
@@ -62,6 +64,7 @@ export function fileRow(ctx, a) {
 
 // ---------- очередь «Проверка» ----------
 
+
 export async function renderReview(ctx, main) {
   let groups;
   try { groups = await ctx.groups(); } catch (e) {
@@ -92,7 +95,7 @@ export async function renderReview(ctx, main) {
   body.replaceChildren(h('ul', { class: 'review-list' }, queue.map(q => {
     const files = Array.isArray(q.files) ? q.files.filter(f => f && typeof f === 'object') : [];
     return h('li', { class: 'review-entry' },
-      h('a', { class: `review-item${files.length ? ' with-files' : ''}`, href: workHref(q.studentId, q.discipline, q.lesson, { a: q.submissionId, from: 'review' }) },
+      h('a', { class: `review-item${files.length ? ' with-files' : ''}`, href: reviewHref(q) },
         h('span', { class: 'review-main' }, h('strong', {}, q.name), h('span', { class: 'muted' }, ` · ${q.group}`)),
         h('span', { class: 'review-sub' }, `${discCode(q.discipline)} · ПЗ ${q.lesson}${q.title ? `. ${q.title}` : ''}`),
         h('span', { class: 'review-meta' }, `${fmtTime(q.time)} · заданий к проверке: ${Array.isArray(q.tasks) ? q.tasks.length : 0}`)),
@@ -107,11 +110,12 @@ const taskMax = t => (t && t.points != null && Number(t.points) > 0 ? Number(t.p
 export async function renderWork(ctx, main) {
   const q = ctx.query;
   const studentId = q.get('student') || '';
+  const teamId = q.get('team') || '';
   const disc = q.get('d') || '';
   const n = Number(q.get('n'));
   const wanted = q.get('a') || '';
   const from = q.get('from') === 'review' ? 'review' : 'journal';
-  if (!studentId || !disc || !Number.isInteger(n) || n < 1) {
+  if ((!studentId && !teamId) || !disc || !Number.isInteger(n) || n < 1) {
     main.replaceChildren(emptyBox('Неверная ссылка на работу.'), h('a', { class: 'btn', href: '#/admin/journal' }, '← К журналу'));
     return;
   }
@@ -119,7 +123,7 @@ export async function renderWork(ctx, main) {
   let lesson = null;
   try {
     const [r, l] = await Promise.all([
-      ctx.call('adminSubmission', { studentId, discipline: disc, lesson: n }),
+      ctx.call('adminSubmission', teamId ? { team: teamId, discipline: disc, lesson: n } : { studentId, discipline: disc, lesson: n }),
       loadLesson(disc, n).catch(() => null), // файла занятия может не быть — тогда показываем ответы без формулировок
     ]);
     sub = r;
@@ -156,7 +160,9 @@ export async function renderWork(ctx, main) {
     // (у занятия без вариантов вся практика, как раньше)
     const variant = a.variant === 'pc' || a.variant === 'phone' ? a.variant
       : hasVariants(lesson) ? inferVariant(lesson, [...items.map(it => String(it.id)), ...Object.keys(answers)]) : undefined;
-    const tasks = allTasks(lesson, variant);
+    // карточка команды (B8): только задания кейса, сданные командой
+    const caseIds = new Set(items.map(it => String(it.id)));
+    const tasks = allTasks(lesson, variant).filter(t => !sub.team || caseIds.has(String(t.id)));
     chips.replaceChildren(...attempts.map((x, i) => h('button', {
       class: `btn small chip${i === cur ? ' primary' : ''}`, type: 'button', 'aria-pressed': String(i === cur),
       onclick: () => { cur = i; draw(); },
@@ -188,6 +194,14 @@ export async function renderWork(ctx, main) {
       h('div', {}, `Автобаллы: ${a.score} из ${a.max}`),
       totalLine);
     redrawTotal();
+    // сигналы B3: вставки в Python, уходы со страницы, подозрительно быстро (suspicious — по всем сдачам ПЗ, поэтому у последней попытки)
+    const sigLines = workSignals(a.signals, cur === attempts.length - 1 && sub.suspicious === true, id => {
+      const i = list.findIndex(t => t.id === id);
+      return i >= 0 ? `задание ${i + 1}` : id;
+    });
+    if (sigLines.length) {
+      summary.append(h('div', { class: 'work-signals' }, h('strong', {}, 'Сигналы'), h('ul', {}, sigLines.map(x => h('li', {}, x))), h('p', { class: 'hint' }, SIGNALS_NOTE)));
+    }
 
     tasksBox.replaceChildren(...list.map((t, i) => {
       const ty = TASK_TYPES[t.type];
@@ -234,7 +248,8 @@ export async function renderWork(ctx, main) {
       art.append(
         h('div', { class: 'work-task-head' }, h('strong', {}, `Задание ${i + 1}`), h('span', { class: 'muted' }, ` · ${TYPE_LABEL[t.type] || t.type}${manual ? ' · ручная проверка' : ''} · ${max} б.`)),
         t.text ? h('div', { class: 'task-text', html: md(t.text) }) : '', // формулировка из файла занятия
-        answerBox, auto, manual ? gradeForm(t, a, max, grades, redrawTotal) : '');
+        answerBox, auto, manual ? gradeForm(t, a, max, grades, redrawTotal) : '',
+        a.defenses && own(a.defenses, t.id) ? h('p', { class: 'work-defense' }, defenseScoreText(a.defenses[t.id].score), a.defenses[t.id].comment ? ` · ${a.defenses[t.id].comment}` : '') : ''); // B2: оценка защиты
       return art;
     }));
   }

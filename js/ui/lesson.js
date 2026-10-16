@@ -17,7 +17,12 @@ import { CHARACTERS } from '../../content/story.js';
 import { stageLabel, isAdv, practiceV4, advIntroNeeded, hasUnseenRules, hasHomework } from '../lesson-v4.js';
 import { introV4, goalV4, warmupV4, safetyV4, reflectV4, criteriaCard, advIntroV4, markCard, groupCommentCard } from './lesson-v4.js';
 import { homeworkV4, homeworkChooser } from './homework.js';
+import { withPhase, createPhaseBanner } from '../live-phase.js';
 import { startLivePulse, stageOf, scoreOf } from '../live-pulse.js';
+import { addPaste, pasteTotal, buildSignals } from '../signals-v4.js';
+import { mountBoardPanel } from '../live-board-client.js';
+import { createTeamCtl, gate as teamGate, banner as teamBanner, footer as teamFooter } from './team.js';
+const safeStorage = () => { try { return globalThis.localStorage; } catch { return null; } };
 
 export async function renderLesson(app, discipline, n) {
   const my = app.routeId;
@@ -276,6 +281,8 @@ export async function renderLesson(app, discipline, n) {
       demo: preview,
       store: preview ? null : app.store, // для «Открыть в песочнице» в заданиях python/terminal
       setBusy: b => { busy = !!b; if (!D.locked[t.id]) drawFooter(); },
+      // сигнал B3: строки, вставленные в редактор Python (только считаем; в демо и не в v4 — нет)
+      onPaste: v4 && !preview ? (id, text) => { if (D.locked[id] || !active()) return; D.paste = addPaste(D.paste, id, text); S(); } : null,
       upload: preview ? null : file => uploadFile(app.api, { discipline, lesson: lesson.number, taskId: t.id, file, accept: t.accept, maxMb: t.maxMb }, (...a) => fetch(...a)),
     };
     const { body, feedback, footer } = ui;
@@ -500,6 +507,7 @@ export async function renderLesson(app, discipline, n) {
     const isStar = v4 && isAdv(t);
     const groupN = isStar ? advList.length : total - advList.length;
     const groupI = isStar ? draft.index - (total - advList.length) : draft.index;
+    if (team && t.case && teamGate(team, teamCtx(), t)) return; // B8: «Открытое занятие» — экран команды вместо задания кейса
     const type = TASK_TYPES[t.type];
     const body = h('div', { class: 'task-body' });
     const feedback = h('div', { class: 'feedback', 'aria-live': 'polite' });
@@ -517,7 +525,7 @@ export async function renderLesson(app, discipline, n) {
         h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Прогресс практики', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { class: 'bar', style: `width:${pct}%` })),
         h('div', { class: 'task-title' }, h('span', {}, v4 ? `${isStar ? '⭐ Задание' : 'Практика · задание'} ${groupI + 1} из ${groupN}` : `${v2 ? 'Практика · задание' : 'Задание'} ${draft.index + 1} из ${total}`),
           pointsPill(t, type, isStar)),
-        caseBlock,
+        caseBlock, team ? teamBanner(team, teamCtx(), t) : '',
         h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer, switchVariant(),
       ], 'Шпаргалка'));
 
@@ -526,9 +534,10 @@ export async function renderLesson(app, discipline, n) {
       save();
       show();
     };
+    const nextBtn = () => h('button', { class: 'btn primary big', type: 'button', onclick: next }, draft.index === total - 1 ? 'К итогам →' : 'Дальше →');
     mountTask(t, {
       body, feedback, footer, onSkip: next,
-      lockedFooter: () => h('button', { class: 'btn primary big', type: 'button', onclick: next }, draft.index === total - 1 ? 'К итогам →' : 'Дальше →'),
+      lockedFooter: team && t.case ? () => teamFooter(team, teamCtx(), t, next, nextBtn) : nextBtn,
     });
   }
 
@@ -580,7 +589,7 @@ export async function renderLesson(app, discipline, n) {
     try {
       sub = buildSubmission({
         profile: app.store.profile(), discipline, lesson, grade, startedAt: draft.startedAt, variant: draft.variant,
-        answers: subAnswers, texts: subTexts, v4: v4 ? v4Submission(lesson, draft, grade) : undefined,
+        answers: subAnswers, texts: subTexts, v4: v4 ? { ...v4Submission(lesson, draft, grade), signals: buildSignals(draft, safeStorage(), discipline, n) } : undefined,
       });
       gain = xpGain(app.store.progress(key), grade);
       const before = levelFor(app.store.state().xp);
@@ -656,16 +665,22 @@ export async function renderLesson(app, discipline, n) {
   let submittedOk = false, pulse = null;
   if (v4 && !preview && app.store.session()) {
     submittedOk = app.store.progress(key) != null; // сдано раньше: сразу «сдал»
+    const boardPanel = mountBoardPanel({ api: app.api, d: discipline, n, storage: safeStorage(), active: () => app.routeId === my && !evicted });
+    const banner = createPhaseBanner({ active: () => app.routeId === my && !evicted });
     pulse = startLivePulse({
-      api: app.api, d: discipline, n, active: () => app.routeId === my && !evicted,
+      api: withPhase(app.api, banner.onPhase), d: discipline, n, active: () => app.routeId === my && !evicted, onState: boardPanel.onState,
       getState: () => {
-        if (!submittedOk) return { stage: stageOf(lesson, draft), ...scoreOf(lesson, draft) };
+        if (!submittedOk) return { stage: stageOf(lesson, draft), ...scoreOf(lesson, draft), paste: pasteTotal(draft.paste) };
         const p = app.store.progress(key);
         const s = p && Number.isFinite(p.best) && Number.isFinite(p.max) ? { score: p.best, max: p.max, pc: draft.variant === 'pc' } : scoreOf(lesson, draft);
-        return { stage: 'done', ...s };
+        return { stage: 'done', ...s, paste: pasteTotal(draft.paste) };
       },
     });
   }
+
+  // B8: командный кейс («Открытое занятие»): только v4 и настоящая сессия; сервер сам скажет, включён ли режим для этого ПЗ
+  const team = v4 && !preview && app.store.session() ? createTeamCtl({ api: app.api, d: discipline, n, storage: safeStorage(), key }) : null;
+  const teamCtx = () => ({ view, header, tools, grid, draft, save, show, practice, lesson, isActive: () => app.routeId === my && !evicted });
 
   show();
 }

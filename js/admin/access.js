@@ -33,6 +33,9 @@ function accessForm(ctx, group, disc, row) {
   const visible = h('input', { type: 'checkbox', id: `${id}-v`, checked: cur.visible !== false });
   const open = h('input', { type: 'text', id: `${id}-o`, name: `open-${id}`, autocomplete: 'off', placeholder: 'все  или  1-5, 7', value: fmtOpen(cur.open === 'all' ? 'all' : (Array.isArray(cur.open) ? cur.open : 'all')) });
   const openNote = h('p', { class: 'hint' });
+  // B8: «🎓 Открытое занятие» — ПЗ, где кейс выполняют командами (пусто — выключено)
+  const team = h('input', { type: 'text', id: `${id}-t`, name: `team-${id}`, autocomplete: 'off', placeholder: 'например 3, 7 (пусто — выключено)', value: fmtOpen(Array.isArray(cur.team) ? cur.team : []) });
+  const teamNote = h('p', { class: 'hint' });
   const dlBox = h('div', { class: 'deadlines' });
   const err = h('p', { class: 'error', role: 'alert' });
   const msg = h('p', { class: 'hint', role: 'status', 'aria-live': 'polite' });
@@ -58,11 +61,20 @@ function accessForm(ctx, group, disc, row) {
   };
   open.addEventListener('input', updNote);
   updNote();
+  const updTeam = () => {
+    const p = parseOpen(team.value);
+    teamNote.textContent = p.error ? p.error : p.value === 'all' ? 'Открытое занятие: на всех ПЗ с кейсом.' : p.value.length ? `Открытое занятие: ПЗ ${fmtOpen(p.value)}.` : 'Выключено: каждый выполняет кейс сам.';
+    teamNote.className = p.error ? 'hint error' : 'hint';
+  };
+  team.addEventListener('input', updTeam);
+  updTeam();
 
   btn.addEventListener('click', async () => {
     err.textContent = ''; msg.textContent = '';
     const p = parseOpen(open.value);
     if (p.error) { err.textContent = p.error; return; }
+    const pt = parseOpen(team.value);
+    if (pt.error) { err.textContent = pt.error; return; }
     const deadlines = {};
     for (const r of dl) {
       const n = r.num.value.trim();
@@ -75,7 +87,7 @@ function accessForm(ctx, group, disc, row) {
     }
     btn.disabled = true;
     try {
-      await ctx.call('adminSetAccess', { group, discipline: disc.id, visible: visible.checked, open: p.value === 'all' ? 'все' : p.value.join(','), deadlines });
+      await ctx.call('adminSetAccess', { group, discipline: disc.id, visible: visible.checked, open: p.value === 'all' ? 'все' : p.value.join(','), deadlines, team: pt.value === 'all' ? 'все' : pt.value.join(',') });
       if (!ctx.alive()) return;
       msg.textContent = '✓ Сохранено';
     } catch (e) { ctx.fail(e, err); } finally { btn.disabled = false; }
@@ -86,6 +98,8 @@ function accessForm(ctx, group, disc, row) {
     h('label', { class: 'check-row', for: `${id}-v` }, visible, h('span', {}, 'Дисциплина видна группе')),
     h('label', { class: 'field', for: `${id}-o` }, h('span', {}, 'Открытые ПЗ'), open),
     openNote,
+    h('label', { class: 'field', for: `${id}-t` }, h('span', {}, '🎓 Открытое занятие (команды) — номера ПЗ'), team),
+    teamNote,
     h('div', { class: 'field' }, h('span', {}, 'Сроки сдачи'), dlBox,
       h('button', { class: 'btn small', type: 'button', onclick: () => dlRow(null, '') }, '➕ Добавить срок')),
     err, msg, btn);

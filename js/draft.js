@@ -2,6 +2,7 @@ import { isV2, allTasks, hasVariants, practiceTasks } from './lesson-model.js';
 import { V4_STAGES, MISTAKE_REASONS, extraTasks, safetyChecks, isAdv } from './lesson-v4.js';
 import { isV4 } from './lesson-v4-model.js';
 import { reflectionFilled, NEXT_MAX } from './grading-v4.js';
+import { cleanPaste } from './signals-v4.js';
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -79,6 +80,8 @@ function repairV4(out, d, lesson, { variant, withVariants, tasks, goalTasks }) {
   out.safetySeen = [...new Set(Array.isArray(d.safetySeen) ? d.safetySeen.filter(k => k === 'phone' || k === 'pc' || k === 'all') : [])];
   // заставка ⭐ уже показана («Начать ⭐» нажато): после перезагрузки не повторяется
   if (d.advIntro === 'seen') out.advIntro = 'seen';
+  const paste = cleanPaste(d.paste, id => Object.prototype.hasOwnProperty.call(out.sigs, id));
+  if (Object.keys(paste).length) out.paste = paste; // B3: строки вставок в Python по заданиям
   out.safetyAttempts = Number.isInteger(d.safetyAttempts) && d.safetyAttempts >= 0 ? d.safetyAttempts : 0;
   const r = isObj(d.reflection) ? d.reflection : {};
   out.reflection = {

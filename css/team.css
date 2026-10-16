@@ -1,0 +1,33 @@
+/* B8: «Открытое занятие» — командный кейс (экран студента, 375 px) и составы команд на доске */
+.team-roles { display: grid; gap: 10px; margin: 10px 0; }
+.team-role h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.team-duties { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.team-duties label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.team-duties input { margin-top: 4px; flex: none; }
+.team-actions { margin: 12px 0; display: grid; gap: 10px; }
+.team-actions h3 { margin: 0; }
+.team-actions input[type="text"] { font-size: 1.4rem; letter-spacing: 0.3em; text-align: center; min-height: 48px; }
+.team-role-picks { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.team-role-pick { display: flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+.team-code-card { text-align: center; }
+.team-code { font-family: var(--font-display); font-size: 3rem; letter-spacing: 0.2em; margin: 4px 0; }
+.team-members ul, .team-lines { margin: 6px 0; padding-left: 20px; display: grid; gap: 4px; }
+.team-members h3 { margin: 0; }
+.team-note { margin: 0 0 8px; }
+.team-wait > * + * { margin-top: 12px; }
+.team-banner { margin: 8px 0; border-left: 4px solid var(--primary); }
+.team-banner.done { border-left-color: var(--ok); background: var(--ok-soft); }
+.team-banner p { margin: 6px 0; }
+
+/* доска: режим «Команды» (1920×1080, шрифт ≥ 20 px) */
+.teams-body { min-height: 0; }
+.board-teams-sum { margin: 0 0 10px; font-size: 26px; color: var(--b-muted, #a8a1b8); }
+.board-teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 14px; }
+.board-team { background: #15121f; border: 2px solid var(--b-line, #3a3550); border-radius: 18px; padding: 10px 16px; font-size: 22px; }
+.board-team.submitted { border-color: #4ade80; }
+.board-team h3 { margin: 0 0 6px; font-size: 26px; }
+.board-team-members { display: grid; gap: 6px; }
+.board-team-member { display: flex; align-items: center; gap: 12px; }
+.board-team-member .av { flex: 0 0 56px; width: 56px; height: 56px; object-fit: contain; }
+.board-team-alone { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 22px; color: var(--b-muted, #a8a1b8); }
+.board-team-alone .av { width: 40px; height: 40px; object-fit: contain; }

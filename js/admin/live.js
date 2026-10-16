@@ -4,7 +4,15 @@ import { avatarUrl, defaultAvatar } from '../avatars.js';
 import { errText } from '../ui/login.js';
 import { DISC, select, hashQuery, loading, loadError, emptyBox } from './common.js';
 import { tileState, stageLabel, fmtClock, clockOffset, awayElapsed, countPresent, countDone, awaySignal } from './board-model.js';
+import { goalLine } from './board-goal.js';
 import { startPoll, startTicker } from './board.js';
+import { liveSignals } from './signals-view.js';
+import { phaseControl } from './board-phase.js';
+import { defensePanel } from './live-defense.js';
+import { createLivePanel } from './board-live.js';
+import { hallPanel } from './board-hall.js';
+import { createCommentForm } from './board-outro.js';
+import { teamsPanel } from './board-teams.js';
 
 const STATE_TEXT = { none: '', away: 'нет на месте', idle: '💤 не активен', done: 'сдал', active: '' };
 
@@ -33,8 +41,15 @@ export async function renderLive(ctx, main) {
   const group = groups.indexOf(qg) >= 0 ? qg : groups[0];
 
   const countEl = h('p', { class: 'live-count' });
+  const goalEl = h('p', { class: 'live-goal' });
   const status = h('p', { class: 'hint', role: 'status' });
+  const phaseCtl = phaseControl(ctx, { group, d, n, alive: ctx.alive });
+  const defensePart = defensePanel(ctx, { group, d, n }); // B2: «Защита сейчас»
+  const hallPart = hallPanel(ctx, { group, names: true, alive: ctx.alive }); // B7: «Зал славы» с именами
+  const teamsPart = teamsPanel(ctx, { group, d, n, names: true, alive: ctx.alive }); // B8: «Команды» с именами
   const list = h('ul', { class: 'live-list' }, h('li', {}, loading('Загружаем…')));
+  // B4: те же кнопки управления интерактивами, что и на доске — с телефона
+  const live = createLivePanel({ call: ctx.call, ref: { group, discipline: d, lesson: n }, variant: 'phone' });
   main.replaceChildren(
     h('div', { class: 'card admin-tools no-print' },
       h('h2', {}, `Мой экран: ПЗ №${n}${title ? ` «${title}»` : ''}`),
@@ -42,7 +57,13 @@ export async function renderLive(ctx, main) {
         h('label', { class: 'field inline' }, h('span', {}, 'Группа'),
           select(groups.map(g => ({ value: g, label: g })), group, v => ctx.go(hashQuery(`/admin/live/${d}/${n}`, { group: v })), { 'aria-label': 'Группа' })),
         h('a', { class: 'btn small', href: `#${hashQuery(`/admin/board/${d}/${n}`, { group })}`, target: '_blank', rel: 'noopener' }, '📺 Доска')),
-      countEl, status),
+      countEl, goalEl, status),
+    h('div', { class: 'card no-print' }, phaseCtl.el),
+    defensePart.el,
+    h('div', { class: 'card no-print' }, live.el),
+    h('details', { class: 'live-hall', ontoggle: e => { if (e.target.open) hallPart.open(); else hallPart.close(); } }, h('summary', {}, '🏆 Зал славы'), hallPart.el),
+    h('div', { class: 'card no-print' }, createCommentForm({ call: ctx.call, ref: { group, discipline: d, lesson: n }, alive: ctx.alive })), // B6: комментарий группе -> «Итог пары» на доске
+    h('details', { class: 'live-hall', ontoggle: e => { if (e.target.open) teamsPart.open(); else teamsPart.close(); } }, h('summary', {}, '👥 Команды'), teamsPart.el),
     list,
     h('p', { class: 'hint live-note' }, 'Сигналы — повод присмотреться, не доказательство: студент мог уйти по делу или потерять связь.'));
 
@@ -78,7 +99,7 @@ export async function renderLive(ctx, main) {
       r.stage.textContent = stageLabel(s.stage);
       r.score.textContent = st === 'none' ? '' : `${s.score == null ? 0 : s.score}/${s.max == null ? 0 : s.max}`;
       r.state.textContent = st === 'away' ? `нет на месте ${fmtClock(awayElapsed(s.awaySince, offset, clientNow))}` : STATE_TEXT[st];
-      r.sig.textContent = awaySignal(s);
+      r.sig.textContent = [awaySignal(s), ...liveSignals(s)].filter(Boolean).join(' · ');
     });
   }
 
@@ -91,8 +112,12 @@ export async function renderLive(ctx, main) {
     status.textContent = '';
     const p = countPresent(students, data.now);
     const dn = countDone(students);
+    goalEl.textContent = goalLine(dn.x, dn.y, data.goal);
     countEl.textContent = `На занятии ${p.x} из ${p.y} · сдали ${dn.x} из ${dn.y}`;
+    defensePart.update(data.defense || null);
+    phaseCtl.update(data.phase, data.now, clientNow);
     paint(clientNow);
+    live.update(data);
   }
 
   let first = true;
@@ -106,5 +131,5 @@ export async function renderLive(ctx, main) {
       status.textContent = 'Нет связи, показаны последние данные.';
     },
   });
-  startTicker(ctx.alive, () => paint(Date.now()));
+  startTicker(ctx.alive, () => { paint(Date.now()); phaseCtl.tick(Date.now()); });
 }

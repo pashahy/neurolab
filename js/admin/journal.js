@@ -1,6 +1,7 @@
 import { h } from '../util/dom.js';
 import { DISC, select, hashQuery, loading, loadError, emptyBox } from './common.js';
 import { errText } from '../ui/login.js';
+import { defenseJournalCell, defenseJournalText } from './board-defense.js';
 
 const own = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
 const SUSPICIOUS_TIP = 'Подозрительно: идеальный автобалл быстрее чем за 3 минуты или больше 5 попыток за день. Проверьте строки студента в листе «Ответы».';
@@ -68,6 +69,7 @@ export async function renderJournal(ctx, main) {
   if (!ctx.alive()) return;
   const students = Array.isArray(d.students) ? d.students : [];
   const cells = d.cells && typeof d.cells === 'object' ? d.cells : {};
+  const defenses = d.defenses && typeof d.defenses === 'object' ? d.defenses : {}; // B2: оценки защит
   // ПЗ только с ДЗ (занятие не сдавали) тоже попадают в журнал: объединяем номера занятий с номерами ячеек, где есть ДЗ
   const lessonSet = new Set((Array.isArray(d.lessons) ? d.lessons : []).map(Number));
   Object.keys(cells).forEach(sid => {
@@ -88,13 +90,14 @@ export async function renderJournal(ctx, main) {
       return h('td', { class: 'jcell hwonly' }, h('div', { class: 'jlink', 'aria-label': `${s.name}, ПЗ ${n}: занятие не сдано${hw ? `, ${hw.label} ${hw.text}` : ''}` },
         h('span', { class: 'jpct muted' }, '–'), hwLine));
     }
+    const dtext = defenseJournalText(defenseJournalCell(defenses, s.id, n));
     const mark = markView(c.mark);
     const markLine = mark ? h('span', { class: `jmark${mark.preliminary ? ' prelim' : ''}` }, mark.text, mark.preliminary ? h('span', { class: 'jprelim' }, 'предв.') : '') : '';
     const pct = c.max > 0 ? `${Math.round(c.best / c.max * 100)}%` : '—';
     const marks = [c.manual === 'pending' ? '⏳' : '', c.manual === 'graded' ? '💬' : '', c.late ? '⏰' : '', c.variant === 'pc' ? '💻' : ''].filter(Boolean).join('');
-    const note = [`автобалл ${c.best} из ${c.max}`, mark ? `отметка ${mark.text}${mark.preliminary ? ' (предварительная)' : ''}` : '', hw ? `${hw.label} ${hw.text}` : '', c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`, c.suspicious ? 'подозрительно: идеал быстрее 3 минут или больше 5 попыток за день' : ''].filter(Boolean).join(', ');
+    const note = [`автобалл ${c.best} из ${c.max}`, mark ? `отметка ${mark.text}${mark.preliminary ? ' (предварительная)' : ''}` : '', hw ? `${hw.label} ${hw.text}` : '', c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`, c.suspicious ? 'подозрительно: идеал быстрее 3 минут или больше 5 попыток за день' : '', dtext ? `защита ${dtext.slice(3)}` : ''].filter(Boolean).join(', ');
     return h('td', { class: 'jcell' }, h('a', { class: `jlink${c.late ? ' late' : ''}`, href: workHref(s.id, disc, n), title: note, 'aria-label': `${s.name}, ПЗ ${n}: ${note}` },
-      h('span', { class: 'jpct' }, pct), markLine, hwLine, marks ? h('span', { class: 'jmarks', 'aria-hidden': 'true' }, marks) : '',
+      h('span', { class: 'jpct' }, pct), markLine, hwLine, dtext ? h('span', { class: 'jdefense' }, dtext) : '', marks ? h('span', { class: 'jmarks', 'aria-hidden': 'true' }, marks) : '',
       c.suspicious === true ? h('span', { class: 'jwarn', title: SUSPICIOUS_TIP, 'aria-hidden': 'true' }, '⚠') : ''));
   };
 

@@ -17,11 +17,11 @@ export default {
   ready: (t, a) => Array.isArray(a?.passed) && a.passed.length === t.tests.length,
   check(t, a) { return fraction(t, Array.isArray(a?.passed) ? a.passed.filter(Boolean).length : 0, t.tests.length); },
   toText: (t, a) => a?.code ?? '',
-  render(t, el, { answer, onChange, locked, store }) {
+  render(t, el, { answer, onChange, locked, store, onPaste }) {
     let code = answer?.code ?? t.starter;
     let passed = answer?.passed ?? null;
     if (!locked) preloadPython();
-    const editor = pyEditor({ value: code, locked, onInput: v => { code = v; passed = null; onChange({ code, passed }); } });
+    const editor = pyEditor({ value: code, locked, onPaste: onPaste ? text => onPaste(t.id, text) : undefined, onInput: v => { code = v; passed = null; onChange({ code, passed }); } });
     const ta = editor.ta;
     const out = pyOutput();
     const results = h('ul', { class: 'py-tests' });
