@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Колба">
+<title>Колба</title>
+<circle cx="48" cy="48" r="48" fill="#ede9fe"/>
+<path d="M40 18h16v4h-3v16l17 28a6 6 0 0 1-5 9H31a6 6 0 0 1-5-9l17-28V22h-3z" fill="#ffffff" stroke="#4c1d95" stroke-width="3" stroke-linejoin="round"/><path d="M33 58h30l7 11a3 3 0 0 1-3 5H29a3 3 0 0 1-3-5z" fill="#8b5cf6"/><circle cx="42" cy="52" r="3" fill="#c4b5fd"/><circle cx="52" cy="46" r="2" fill="#c4b5fd"/><circle cx="48" cy="12" r="3" fill="#a78bfa"/>
+</svg>

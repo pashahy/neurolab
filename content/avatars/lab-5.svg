@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Микросхема">
+<title>Микросхема</title>
+<circle cx="48" cy="48" r="48" fill="#052e16"/>
+<g stroke="#86efac" stroke-width="4" stroke-linecap="round"><path d="M36 14v14M48 14v14M60 14v14M36 68v14M48 68v14M60 68v14M14 36h14M14 48h14M14 60h14M68 36h14M68 48h14M68 60h14"/></g><rect x="26" y="26" width="44" height="44" rx="7" fill="#16a34a"/><rect x="34" y="34" width="28" height="28" rx="4" fill="#052e16"/><circle cx="48" cy="48" r="6" fill="#4ade80"/><circle cx="31" cy="31" r="2" fill="#bbf7d0"/>
+</svg>

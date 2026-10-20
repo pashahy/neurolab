@@ -1,4 +1,5 @@
 import { createStore } from './store.js';
+import { applyTheme, storedTheme } from './sandbox/cosmetics.js';
 import { createSubmitter } from './submit.js';
 import { createApi } from './api.js';
 import { createProgressSync } from './progress-sync.js';
@@ -156,6 +157,7 @@ function route() {
   const query = new URLSearchParams(q < 0 ? '' : raw.slice(q + 1));
   const [a, b, c] = path.split('/').filter(Boolean);
   const session = store.session();
+  applyTheme(document.documentElement, session ? storedTheme(store) : 'default'); // тема студента (только на этом телефоне)
   if (!isDemo(a) && a !== 'login' && a !== 'admin' && !session) { location.replace(`#/login?next=${encodeURIComponent(path)}`); return; }
   if (a === 'login' && session) { location.replace(`#${safeNext(query.get('next'))}`); return; }
   app.routeId++;

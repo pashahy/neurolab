@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Робот-учёный">
+<title>Робот-учёный</title>
+<circle cx="48" cy="48" r="48" fill="#fce7f3"/>
+<rect x="22" y="22" width="52" height="40" rx="12" fill="#be185d"/><rect x="42" y="12" width="12" height="10" rx="3" fill="#9d174d"/><circle cx="48" cy="11" r="4" fill="#fbbf24"/><rect x="28" y="32" width="40" height="16" rx="8" fill="#ffffff" fill-opacity="0.9"/><circle cx="39" cy="40" r="5" fill="#0f172a"/><circle cx="57" cy="40" r="5" fill="#0f172a"/><path d="M40 55h16" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/><path d="M26 66h44l6 24H20z" fill="#ffffff"/><path d="M48 66v24" stroke="#d1d5db" stroke-width="2"/><rect x="31" y="74" width="8" height="6" rx="1" fill="#f9a8d4"/>
+</svg>

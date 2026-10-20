@@ -1,3 +1,5 @@
+import { MISSION_COUNT } from './sandbox/mission-count.js';
+
 export const LEVELS = [
   { min: 0, title: 'Стажёр' },
   { min: 150, title: 'Младший специалист' },
@@ -28,6 +30,12 @@ export function xpGain(prev, result) {
 const done = s => Object.keys(s.progress);
 // статистика песочницы лежит в черновиках студента (js/sandbox/storage.js, ключ sandbox:stats)
 const sbxStat = (s, k) => { const v = s.drafts && s.drafts['sandbox:stats']; return v && Number(v[k]) || 0; };
+// мини-миссии терминала: пройдены все (черновик sandbox:missions = { done: [id] })
+const sbxMissionsDone = s => {
+  const v = s.drafts && s.drafts['sandbox:missions'];
+  const got = v && Array.isArray(v.done) ? v.done : [];
+  return got.filter((x, i) => typeof x === 'string' && got.indexOf(x) === i).length >= MISSION_COUNT;
+};
 const perfectType =type => (s, c) => !!c.perfectTypes?.includes(type);
 
 export const BADGES = [
@@ -48,6 +56,7 @@ export const BADGES = [
   { id: 'sbx-streak7', icon: '⚡', title: 'Серия 7', desc: 'Решать задачи дня 7 дней подряд', test: s => sbxStat(s, 'bestStreak') >= 7 },
   { id: 'sbx-streak14', icon: '🌋', title: 'Серия 14', desc: 'Решать задачи дня 14 дней подряд', test: s => sbxStat(s, 'bestStreak') >= 14 },
   { id: 'sbx-star10', icon: '⭐', title: 'Звёздный', desc: 'Решить 10 задач со звёздочкой', test: s => sbxStat(s, 'starSolved') >= 10 },
+  { id: 'sbx-missions', icon: '🖥️', title: 'Мастер терминала', desc: 'Пройти все мини-миссии терминала в песочнице', test: s => sbxMissionsDone(s) },
 ];
 
 export function newBadges(state, ctx = {}) {

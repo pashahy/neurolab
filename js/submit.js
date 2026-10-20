@@ -299,7 +299,7 @@ export function createSubmitter({
         const t = tries.get(q.id);
         const kind = held.has(q.id) ? 'hold' : lim ? 'limit' : t ? t.kind : null;
         const error = held.has(q.id) ? held.get(q.id) : t ? t.error : '';
-        return { id: q.id, discipline: q.discipline, lesson: q.lesson, hw: q.kind === 'hw', sbx: q.kind === 'sbx' ? (/^term/.test(String(q.taskId)) ? 'term' : 'py') : null, attempts: t ? t.attempts : 0, kind, error };
+        return { id: q.id, discipline: q.discipline, lesson: q.lesson, hw: q.kind === 'hw', sbx: q.kind === 'sbx' ? (q.source === 'tree' ? 'tree' : q.source === 'quest' ? 'quest' : /^(term|dk)/.test(String(q.taskId)) ? 'term' : /^api/.test(String(q.taskId)) ? 'api' : /^pr-/.test(String(q.taskId)) ? 'prompt' : 'py') : null, attempts: t ? t.attempts : 0, kind, error };
       });
     },
     // последняя ошибка именно этой работы

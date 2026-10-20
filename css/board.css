@@ -306,3 +306,33 @@ body.board-mode .phase-seg, body.board-mode .phase-btn { font-size: 20px; }
 /* B4: инлайн-код в тексте интерактивов; пустой результат до запуска не занимает место (список готовых — под заголовком) */
 .lp code, .live-panel code { font-family: var(--font-mono); font-size: 0.92em; padding: 0 0.25em; border-radius: 6px; background: color-mix(in srgb, currentColor 14%, transparent); }
 .lp-board .lp-view:empty { display: none; }
+
+/* Титул под аватаром (v2): одна короткая строка, имён на общей доске нет */
+.tile-title { font-size: clamp(0.7rem, 1.4vw, 0.95rem); color: var(--muted); text-align: center; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- C1: «Нет на паре» ---------- */
+.tile-absent-btn { display: none; position: absolute; left: 8px; bottom: 8px; font: inherit; font-size: 20px; font-weight: 600; line-height: 1.1; padding: 4px 10px; border-radius: 10px; cursor: pointer; background: var(--b-surface); color: var(--b-muted); border: 1px solid var(--b-line); opacity: 0.85; }
+.tile-absent-btn:hover, .tile-absent-btn:focus-visible { opacity: 1; color: var(--b-text); }
+.tile-none .tile-absent-btn { display: block; }
+.board-absent { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; font-size: 22px; font-weight: 600; color: var(--b-muted); }
+.board-absent[hidden] { display: none; }
+.board-absent-list { display: flex; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+.board-absent-back { display: inline-flex; align-items: center; gap: 2px; font: inherit; font-size: 20px; padding: 2px 6px; border-radius: 10px; cursor: pointer; background: var(--b-surface); color: var(--b-muted); border: 1px solid var(--b-line); }
+.board-absent-avatar { width: 36px; height: 36px; object-fit: contain; filter: grayscale(1); opacity: 0.7; }
+.live-absent { opacity: 0.6; background: var(--surface-2); border-style: dotted; }
+.live-absent .live-avatar { filter: grayscale(1); }
+.live-absent-btn { flex: 0 0 auto; margin-left: auto; }
+/* C2: зрительский вид интерактива на доске */
+.iav { gap: 16px; }
+.iav-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 32px; }
+.iav-title { margin: 0; flex: 1 1 0; min-width: 0; font: 700 40px/1.2 var(--font-display); overflow-wrap: anywhere; }
+.iav-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: 0 0 auto; }
+.iav-corner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.iav-seg { display: inline-flex; gap: 2px; }
+.iav-seg[hidden] { display: none; }
+.iav-btn[aria-pressed="true"] { background: var(--b-active); color: var(--b-bg, #000); border-color: var(--b-active); }
+.iav-btn { font: inherit; font-size: 20px; min-height: 44px; padding: 4px 14px; border-radius: 10px; border: 1px solid var(--b-line); background: var(--b-surface); color: var(--b-muted); cursor: pointer; }
+.iav-btn:disabled { opacity: 0.5; cursor: default; }
+.iav-status { margin: 0; color: var(--b-away); font-weight: 600; }
+.iav-status:empty { display: none; }
+.lp-board .lp-word { cursor: default; }

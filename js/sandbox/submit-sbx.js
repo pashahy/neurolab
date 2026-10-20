@@ -1,16 +1,21 @@
 // Сдача песочницы через общую очередь отправки (kind: 'sbx' -> действие sandboxSolve, поле solution).
 
-export function buildSandboxSolution({ d, taskId, date, token, outputs, history, now = Date.now(), rnd = Math.random }) {
+// blocks — блоки конструктора промптов, answer — ответ на вопрос api-задачи; history — команды или запросы { method, path, body }
+// source: 'tree' — челлендж дерева навыков, 'quest' — шаг квеста (даты нет)
+export function buildSandboxSolution({ d, taskId, date, token, outputs, history, blocks, answer, source, now = Date.now(), rnd = Math.random }) {
   const s = {
     id: `${now.toString(36)}-${Math.floor(rnd() * 1e9).toString(36)}`,
     kind: 'sbx',
     d,
     taskId,
-    date,
   };
+  if (source === 'tree' || source === 'quest') s.source = source;
+  else s.date = date;
   if (token !== undefined) s.token = token;
   if (outputs !== undefined) s.outputs = outputs;
   if (history !== undefined) s.history = history;
+  if (blocks !== undefined) s.blocks = blocks;
+  if (answer !== undefined) s.answer = answer;
   return s;
 }
 

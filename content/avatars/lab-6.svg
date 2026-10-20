@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Идея">
+<title>Идея</title>
+<circle cx="48" cy="48" r="48" fill="#fff7ed"/>
+<path d="M48 14a24 24 0 0 0-13 44v8h26v-8A24 24 0 0 0 48 14z" fill="#fbbf24" stroke="#b45309" stroke-width="3" stroke-linejoin="round"/><rect x="38" y="68" width="20" height="6" rx="3" fill="#78350f"/><rect x="41" y="76" width="14" height="6" rx="3" fill="#78350f"/><path d="M42 50l6-12 6 12" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 30l8 4M84 30l-8 4M48 4v4" stroke="#ea580c" stroke-width="4" stroke-linecap="round"/>
+</svg>

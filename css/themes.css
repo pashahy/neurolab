@@ -1,0 +1,112 @@
+/* Косметика песочницы: темы оформления (data-skin на <html>) и рамки аватара (.frm-*). Выбор — js/sandbox/cosmetics.js.
+   Темы переопределяют токены из app.css; «Терминал» и «Космос» тёмные всегда, «Неон» и «Лес» следуют светлой/тёмной схеме устройства. */
+
+/* ---- Неон ---- */
+:root[data-skin="neon"] {
+  --bg: #f3f6ff; --surface: #ffffff; --surface-2: #e6ecff; --text: #0c1230; --muted: #4a5278;
+  --border: #d3dcf7; --border-strong: #7480b0;
+  --primary: #b21cc4; --primary-ink: #ffffff; --primary-soft: #f8e4fb;
+  --grad: linear-gradient(120deg, #00b8d9 0%, #7c3aed 50%, #e0219b 100%);
+  --grad-shade: linear-gradient(120deg, rgb(10 6 40 / 0.1), rgb(10 6 40 / 0.3));
+  --grad-soft: linear-gradient(140deg, rgb(0 184 217 / 0.14), rgb(224 33 155 / 0.1));
+  --grad-ink: linear-gradient(120deg, #0a6f87 0%, #6a2bd6 50%, #b8157f 100%);
+  --orb-1: rgb(224 33 155 / 0.16); --orb-2: rgb(0 184 217 / 0.16); --orb-3: rgb(124 58 237 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="neon"] {
+    --bg: #0a0618; --surface: #150c2b; --surface-2: #211244; --text: #f6efff; --muted: #bba9e0;
+    --border: rgb(34 211 238 / 0.22); --border-strong: rgb(34 211 238 / 0.6);
+    --primary: #22d3ee; --primary-ink: #04141a; --primary-soft: #0c3945;
+    --grad: linear-gradient(120deg, #22d3ee 0%, #a855f7 50%, #f43f9a 100%);
+    --grad-soft: linear-gradient(140deg, rgb(34 211 238 / 0.3), rgb(244 63 154 / 0.2));
+    --grad-ink: linear-gradient(120deg, #5eead4 0%, #c4a1ff 50%, #ff8cc6 100%);
+    --orb-1: rgb(244 63 154 / 0.3); --orb-2: rgb(34 211 238 / 0.28); --orb-3: rgb(168 85 247 / 0.22);
+  }
+}
+
+/* ---- Терминал (тёмная всегда) ---- */
+:root[data-skin="terminal"] {
+  --bg: #050a06; --surface: #0b150d; --surface-2: #122016; --text: #c8f5cf; --muted: #86bb91;
+  --border: rgb(74 222 128 / 0.25); --border-strong: rgb(74 222 128 / 0.6);
+  --primary: #4ade80; --primary-ink: #04100a; --primary-soft: #11321d;
+  --grad: linear-gradient(120deg, #166534 0%, #22c55e 100%);
+  --grad-shade: linear-gradient(120deg, rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.4));
+  --grad-soft: linear-gradient(140deg, rgb(74 222 128 / 0.22), rgb(74 222 128 / 0.06));
+  --grad-ink: linear-gradient(120deg, #86efac 0%, #4ade80 100%);
+  --orb-1: rgb(74 222 128 / 0.12); --orb-2: rgb(34 197 94 / 0.1); --orb-3: rgb(21 128 61 / 0.1);
+  --ok: #4ade80; --ok-soft: #12301f; --bad: #f87171; --bad-soft: #3a1717; --warn: #fbbf24; --warn-soft: #3a2c0c;
+  --ok-ink: #04100a; --bad-ink: #140404; --shadow: none;
+  --font-display: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-body: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+
+/* ---- Лес ---- */
+:root[data-skin="forest"] {
+  --bg: #f1f7ee; --surface: #ffffff; --surface-2: #e2eedb; --text: #14231a; --muted: #476050;
+  --border: #cfe0c6; --border-strong: #6c8872;
+  --primary: #2b7536; --primary-ink: #ffffff; --primary-soft: #dcf0d8;
+  --grad: linear-gradient(120deg, #3f9c4d 0%, #86b83a 55%, #d9a441 100%);
+  --grad-shade: linear-gradient(120deg, rgb(10 40 20 / 0.12), rgb(10 40 20 / 0.32));
+  --grad-soft: linear-gradient(140deg, rgb(63 156 77 / 0.16), rgb(217 164 65 / 0.1));
+  --grad-ink: linear-gradient(120deg, #1d6b2a 0%, #4f7d1a 55%, #8a5a07 100%);
+  --orb-1: rgb(63 156 77 / 0.16); --orb-2: rgb(134 184 58 / 0.14); --orb-3: rgb(217 164 65 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="forest"] {
+    --bg: #0e1a12; --surface: #16261c; --surface-2: #203528; --text: #e8f4e6; --muted: #a5c1aa;
+    --border: rgb(134 214 143 / 0.18); --border-strong: rgb(134 214 143 / 0.5);
+    --primary: #86d68f; --primary-ink: #0e1a12; --primary-soft: #1f3d27;
+    --grad: linear-gradient(120deg, #4ade80 0%, #a3e635 55%, #fbbf24 100%);
+    --grad-soft: linear-gradient(140deg, rgb(74 222 128 / 0.28), rgb(251 191 36 / 0.14));
+    --grad-ink: linear-gradient(120deg, #86efac 0%, #bef264 55%, #fcd34d 100%);
+    --orb-1: rgb(74 222 128 / 0.22); --orb-2: rgb(163 230 53 / 0.16); --orb-3: rgb(251 191 36 / 0.12);
+  }
+}
+
+/* ---- Космос (тёмная всегда) ---- */
+:root[data-skin="cosmos"] {
+  --bg: #090a1d; --surface: #13153a; --surface-2: #1d2050; --text: #eef0ff; --muted: #b0b6e8;
+  --border: rgb(167 139 250 / 0.22); --border-strong: rgb(167 139 250 / 0.58);
+  --primary: #a78bfa; --primary-ink: #090a1d; --primary-soft: #2a2362;
+  --grad: linear-gradient(120deg, #4f46e5 0%, #8b5cf6 50%, #22d3ee 100%);
+  --grad-shade: linear-gradient(120deg, rgb(0 0 20 / 0.2), rgb(0 0 20 / 0.4));
+  --grad-soft: linear-gradient(140deg, rgb(139 92 246 / 0.34), rgb(34 211 238 / 0.16));
+  --grad-ink: linear-gradient(120deg, #a5b4fc 0%, #c4b5fd 50%, #67e8f9 100%);
+  --orb-1: rgb(139 92 246 / 0.34); --orb-2: rgb(34 211 238 / 0.2); --orb-3: rgb(79 70 229 / 0.28);
+  --ok: #4ade80; --ok-soft: #12301f; --bad: #f87171; --bad-soft: #3a1717; --warn: #fbbf24; --warn-soft: #3a2c0c;
+  --ok-ink: #090a1d; --bad-ink: #090a1d; --shadow: none;
+  color-scheme: dark;
+}
+
+/* ---- Рамки аватара: класс «frm frm-<код>» на <img>; толщина — --frm (на доске крупнее) ---- */
+.frm { --frm: 3px; border-radius: 50%; }
+.tile-avatar.frm, .defense-avatar.frm { --frm: 6px; }
+.hall-pic.frm { --frm: 4px; }
+.hall-pic-s.frm, .hall-ava.frm { --frm: 2px; }
+.frm-silver { box-shadow: 0 0 0 var(--frm) #e2e8f0, 0 0 0 calc(var(--frm) * 1.8) #64748b; }
+.frm-mint { box-shadow: 0 0 0 var(--frm) #6ee7b7, 0 0 0 calc(var(--frm) * 1.8) #047857; }
+.frm-gold { box-shadow: 0 0 0 var(--frm) #fcd34d, 0 0 0 calc(var(--frm) * 1.8) #b45309; }
+.frm-neon { box-shadow: 0 0 0 var(--frm) #22d3ee, 0 0 calc(var(--frm) * 4) calc(var(--frm) * 1.2) rgb(34 211 238 / 0.7); }
+.frm-aurora { box-sizing: border-box; padding: var(--frm); background: conic-gradient(#22d3ee, #a855f7, #f43f9a, #fbbf24, #4ade80, #22d3ee); }
+.frm-royal { box-shadow: 0 0 0 var(--frm) #fcd34d, 0 0 0 calc(var(--frm) * 1.8) #7c3aed, 0 0 calc(var(--frm) * 5) rgb(252 211 77 / 0.55); }
+@media (prefers-reduced-motion: no-preference) {
+  .frm-aurora { animation: frm-spin 8s linear infinite; }
+  .frm-royal { animation: frm-glow 2.4s ease-in-out infinite alternate; }
+}
+@keyframes frm-spin { to { filter: hue-rotate(360deg); } }
+@keyframes frm-glow { to { box-shadow: 0 0 0 var(--frm) #fcd34d, 0 0 0 calc(var(--frm) * 1.8) #7c3aed, 0 0 calc(var(--frm) * 8) rgb(252 211 77 / 0.8); } }
+
+/* ---- Профиль: выбор темы и рамки ---- */
+.cos-card { margin-top: 12px; }
+.cos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+.cos-opt { min-height: 44px; padding: 8px 10px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; display: flex; flex-direction: column; gap: 2px; }
+.cos-opt[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.cos-opt:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.cos-opt[aria-disabled="true"] { border-style: dashed; background: transparent; cursor: not-allowed; } /* текст не гасим: «Откроется на уровне…» должно читаться */
+.cos-opt small { color: var(--muted); font-size: 0.8rem; }
+.cos-sample { width: 44px; height: 44px; margin: 6px; flex: none; }
+.avatar-opt[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.avatar-opt { position: relative; }
+.avatar-lock { position: absolute; right: -2px; bottom: -2px; font-size: 0.8rem; line-height: 1; }
+.avatar-lab-head { margin: 8px 0 0; }

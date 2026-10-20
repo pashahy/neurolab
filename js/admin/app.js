@@ -11,6 +11,7 @@ import { renderSummary } from './summary.js';
 import { renderSettings } from './settings.js';
 import { renderBoard } from './board.js';
 import { renderLive } from './live.js';
+import { renderAdminSandbox } from './sandbox.js';
 
 const TABS = [
   { id: 'students', label: 'Студенты', render: renderStudents },
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'stats', label: 'Статистика', render: renderStats },
   { id: 'summary', label: 'Сводка', render: renderSummary },
   { id: 'settings', label: 'Настройки', render: renderSettings },
+  { id: 'sandbox', label: '🧪 Песочница', render: renderAdminSandbox },
 ];
 const ADMIN_PASSWORD_MIN = 10;
 

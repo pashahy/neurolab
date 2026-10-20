@@ -40,10 +40,10 @@ export function cleanPaste(raw, keep = () => true) {
   return out;
 }
 
-// Учёт ухода js/live-pulse.js лежит в хранилище по ключу live:away:<d>:<n> как { count, ms }.
+// Учёт ухода js/live-pulse.js лежит в хранилище по ключу live:away2:<d>:<n> как { count, ms }.
 export function readAway(storage, d, n) {
   try {
-    const raw = storage && storage.getItem(`live:away:${d}:${n}`);
+    const raw = storage && storage.getItem(`live:away2:${d}:${n}`);
     const o = raw ? JSON.parse(raw) : null;
     if (o && typeof o === 'object') return { count: clampInt(o.count, MAX_AWAY_COUNT), ms: clampInt(o.ms, MAX_AWAY_MS) };
   } catch { /* хранилище недоступно или значение испорчено */ }

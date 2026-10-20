@@ -21,7 +21,12 @@ self.onmessage = async ({ data }) => {
   try {
     const py = await ready;
     if (Array.isArray(data.packages) && data.packages.length) {
-      await py.loadPackage(data.packages);
+      try {
+        await py.loadPackage(data.packages, { messageCallback: text => self.postMessage({ type: 'progress', runId: data.id, stage: 'packages', text: String(text) }) });
+      } catch (e) {
+        self.postMessage({ type: 'packagesError', id: data.id, error: String((e && e.message) || e) });
+        return;
+      }
       self.postMessage({ type: 'packages', id: data.id });
     }
     py.globals.set('__job', JSON.stringify({ code: data.code, runs: data.runs }));

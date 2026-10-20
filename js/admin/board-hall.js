@@ -3,6 +3,7 @@ import { h } from '../util/dom.js';
 import { avatarUrl, defaultAvatar } from '../avatars.js';
 import { daysWord } from '../sandbox/streak-view.js';
 import { errText } from '../ui/login.js';
+import { frameClass } from '../sandbox/cosmetics.js';
 
 export const HALL_REFRESH_MS = 60000; // пока зал открыт; сервер всё равно кэширует на 5 минут
 
@@ -16,27 +17,28 @@ export function pointsWord(n) {
 
 const list = v => (Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : []);
 const img = e => avatarUrl(e.avatar || defaultAvatar(''));
+const fr = (o, e) => { if (frameClass(e.frame)) o.frame = e.frame; return o; }; // рамка студента (если выбрана) идёт вместе со строкой
 
 function ranked(entries, names) {
-  return list(entries).map((e, i) => ({
+  return list(entries).map((e, i) => fr({
     place: i + 1,
     img: img(e),
     alt: names && e.name ? String(e.name) : '',
-    label: names && e.name ? String(e.name) : '',
+    label: [names && e.name ? String(e.name) : '', e.title ? String(e.title) : ''].filter(Boolean).join(' · '), // титул под аватаром; имя — только «Моему экрану»
     text: `${e.points} ${pointsWord(e.points)}`,
-  }));
+  }, e));
 }
 
 // -> [{ id, title, hint, items: [{ place, img, alt, label, text }], extra: [{ img, alt, text }] }]
 export function hallSections(data, names) {
   const d = data && typeof data === 'object' ? data : {};
   const who = e => (names && e.name ? `${e.name} — ` : '');
-  const extra = list(d.streaks).map(e => ({
+  const extra = list(d.streaks).map(e => fr({
     img: img(e), alt: names && e.name ? String(e.name) : '',
     text: names && e.name ? `🔥 ${e.name} — ${e.streak} ${daysWord(e.streak)}` : `🔥 серия ${e.streak} ${daysWord(e.streak)}`,
-  }));
+  }, e));
   const f = d.firstToday && typeof d.firstToday === 'object' ? d.firstToday : null;
-  if (f) extra.push({ img: img(f), alt: names && f.name ? String(f.name) : '', text: `🥇 ${who(f)}первым сегодня в ${f.at}` });
+  if (f) extra.push(fr({ img: img(f), alt: names && f.name ? String(f.name) : '', text: `🥇 ${who(f)}первым сегодня в ${f.at}` }, f));
   return [
     { id: 'sandbox', title: '🧪 Песочница за неделю', hint: 'Очки песочницы за последние 7 дней', items: ranked(d.sandbox, names), extra },
     { id: 'lessons', title: '📘 Занятия за неделю', hint: 'Баллы за ПЗ: авто, лучшая попытка за неделю', items: ranked(d.lessons, names), extra: [] },
@@ -46,10 +48,10 @@ export function hallSections(data, names) {
 function sectionEl(s) {
   const rows = s.items.map(it => h('li', { class: 'hall-item' },
     h('span', { class: 'hall-place' }, String(it.place)),
-    h('img', { class: 'hall-pic', src: it.img, alt: it.alt, width: '72', height: '72', draggable: 'false' }),
+    h('img', { class: ('hall-pic ' + frameClass(it.frame)).trim(), src: it.img, alt: it.alt, width: '72', height: '72', draggable: 'false' }),
     h('span', { class: 'hall-text' }, it.label ? h('span', { class: 'hall-label' }, it.label) : null, h('span', { class: 'hall-pts' }, it.text))));
   const more = s.extra.map(it => h('li', { class: 'hall-extra' },
-    h('img', { class: 'hall-pic-s', src: it.img, alt: it.alt, width: '44', height: '44', draggable: 'false' }), h('span', {}, it.text)));
+    h('img', { class: ('hall-pic-s ' + frameClass(it.frame)).trim(), src: it.img, alt: it.alt, width: '44', height: '44', draggable: 'false' }), h('span', {}, it.text)));
   return h('section', { class: `hall-sec hall-${s.id}` },
     h('h2', { class: 'hall-h' }, s.title),
     rows.length ? h('ol', { class: 'hall-list' }, rows) : h('p', { class: 'hall-empty' }, 'Пока пусто'),

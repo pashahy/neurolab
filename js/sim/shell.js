@@ -82,7 +82,7 @@ function copy(sh, a, b, move, recursive) {
 }
 
 const COMMANDS = {
-  help: () => 'Команды: pwd, ls [-a], cd, mkdir [-p], touch, cat, echo, rm [-r], mv, cp [-r], clear, whoami, env, export, history, git',
+  help: () => 'Команды: pwd, ls [-a], cd, mkdir [-p], touch, cat, echo, rm [-r], mv, cp [-r], clear, whoami, env, export, history, git, docker',
   pwd: sh => sh.cwd,
   whoami: sh => sh.env.USER,
   clear: () => '\u001bclear',
@@ -157,6 +157,7 @@ const COMMANDS = {
   },
   history: sh => sh.history.map((x, i) => `${String(i + 1).padStart(4)}  ${x}`).join('\n'),
   git: (sh, args) => git(sh, args),
+  docker: (sh, args) => dockerCmd(sh, args),
 };
 
 function run(sh, line) {
@@ -478,7 +479,401 @@ function git(sh, args) {
   return '';
 }
 
-export const GOAL_KINDS = ['dir', 'file', 'noFile', 'cwd', 'gitInit', 'config', 'commits', 'commitMessage', 'tracked', 'staged', 'clean', 'branch', 'onBranch', 'used', 'env'];
+// ---------- docker (учебный) ----------
+// Состояние sh.docker = { seq, images, containers } детерминировано: id считаются от счётчика, времени и случайности нет
+// (сервер повторяет историю и обязан получить то же самое).
+const DOCKER_MAX_CONTAINERS = 50;
+const DOCKER_MAX_IMAGES = 30;
+const DOCKER_MAX_LOG_LINES = 100;
+const DOCKER_MAX_LOG_LEN = 200;
+const DOCKER_TRAIN = {
+  'hello-world': { tags: ['latest'], size: '13.3kB', kind: 'once', cmd: '/hello' },
+  python: { tags: ['3.12', '3.12-slim', 'latest'], size: '1.02GB', kind: 'script', cmd: 'python3' },
+  nginx: { tags: ['latest', 'alpine'], size: '192MB', kind: 'service', cmd: "/docker-entrypoint.sh nginx -g 'daemon off;'" },
+  'neurolab/api': { tags: ['latest'], size: '145MB', kind: 'service', cmd: 'uvicorn main:app --host 0.0.0.0' },
+  'neurolab/bot': { tags: ['latest'], size: '98MB', kind: 'service', cmd: 'python bot.py' },
+};
+const DOCKER_SERVICE_LOGS = {
+  nginx: ['/docker-entrypoint.sh: Configuration complete; ready for start up', 'nginx: worker process started'],
+  'neurolab/api': ['INFO:     Started server process [1]', 'INFO:     Uvicorn running on http://0.0.0.0:8000'],
+  'neurolab/bot': ['Bot started, polling updates...'],
+};
+const DOCKER_HELLO = ['', 'Hello from Docker!', 'This message shows that your installation appears to be working correctly.', ''];
+const DOCKER_ADJ = ['brave', 'calm', 'eager', 'fancy', 'happy', 'jolly', 'keen', 'lucid', 'nifty', 'quirky'];
+const DOCKER_NOUN = ['turing', 'lovelace', 'hopper', 'knuth', 'ritchie', 'torvalds', 'wozniak', 'liskov'];
+const DOCKER_SUBS = ['run', 'ps', 'images', 'stop', 'start', 'rm', 'rmi', 'logs', 'build', 'pull'];
+
+function dockerOf(sh) {
+  if (!sh.docker) sh.docker = { seq: 0, images: [], containers: [] };
+  return sh.docker;
+}
+function dockerHex(seed, n) {
+  let s = '';
+  for (let i = 0; s.length < n; i++) s += hash(`${seed}#${i}`);
+  return s.slice(0, n);
+}
+function dockerRef(text) {
+  const s = String(text);
+  const i = s.lastIndexOf(':');
+  if (i > s.lastIndexOf('/') && i > 0) return { name: s.slice(0, i), tag: s.slice(i + 1) || 'latest', typed: true };
+  return { name: s, tag: 'latest', typed: false };
+}
+function dockerTable(rows) {
+  const w = [];
+  for (const r of rows) r.forEach((c, i) => { w[i] = Math.max(w[i] || 0, c.length); });
+  return rows.map(r => r.map((c, i) => (i === r.length - 1 ? c : c.padEnd(w[i] + 3))).join('')).join('\n');
+}
+function dockerFindImage(d, name, tag) {
+  return d.images.find(im => im.name === name && im.tag === tag) || null;
+}
+// Находит образ локально; учебный образ докачивает сам (как docker run), лишние строки кладёт в out.
+function dockerEnsureImage(sh, ref, out, buildMode) {
+  const d = dockerOf(sh);
+  const local = dockerFindImage(d, ref.name, ref.tag);
+  if (local) return local;
+  const tr = has(DOCKER_TRAIN, ref.name) ? DOCKER_TRAIN[ref.name] : null;
+  if (!tr) {
+    if (buildMode) fail(`ERROR: failed to solve: ${ref.name}:${ref.tag}: failed to resolve source metadata for docker.io/library/${ref.name}:${ref.tag}: pull access denied, repository does not exist or may require authorization`);
+    fail(`Unable to find image '${ref.name}:${ref.tag}' locally\ndocker: Error response from daemon: pull access denied for ${ref.name}, repository does not exist or may require 'docker login': denied: requested access to the resource is denied.\nВ тренажёре есть учебные образы: ${Object.keys(DOCKER_TRAIN).join(', ')}.`);
+  }
+  if (tr.tags.indexOf(ref.tag) < 0) {
+    if (buildMode) fail(`ERROR: failed to solve: ${ref.name}:${ref.tag}: docker.io/library/${ref.name}:${ref.tag}: not found`);
+    fail(`Unable to find image '${ref.name}:${ref.tag}' locally\ndocker: Error response from daemon: manifest for ${ref.name}:${ref.tag} not found: manifest unknown: manifest unknown.\nДоступные теги ${ref.name}: ${tr.tags.join(', ')}.`);
+  }
+  if (d.images.length >= DOCKER_MAX_IMAGES) fail(`docker: в тренажёре не больше ${DOCKER_MAX_IMAGES} образов — удали лишние (docker rmi)`);
+  d.seq++;
+  const im = { name: ref.name, tag: ref.tag, id: dockerHex(`img:${ref.name}:${ref.tag}:${d.seq}`, 12), size: tr.size, base: ref.name, kind: tr.kind, cmd: tr.cmd, files: {} };
+  d.images.push(im);
+  out.push(`Unable to find image '${ref.name}:${ref.tag}' locally`, `${ref.tag}: Pulling from library/${ref.name}`, `Status: Downloaded newer image for ${ref.name}:${ref.tag}`);
+  return im;
+}
+function dockerFindContainer(d, key) {
+  const k = String(key).replace(/^\//, '');
+  return d.containers.find(c => c.name === k) || (k ? d.containers.find(c => c.id.startsWith(k)) : null) || null;
+}
+function dockerPrints(src) {
+  const out = [];
+  const re = /print\(\s*(["'])(.*?)\1\s*\)/g;
+  let m;
+  while ((m = re.exec(src)) !== null) out.push(m[2]);
+  return out;
+}
+// Что печатает команда внутри контейнера. Возвращает { lines, code }.
+function dockerRunCmd(im, t) {
+  if (!t.length) return { lines: [], code: 0 };
+  if (t[0] === 'echo') return { lines: [t.slice(1).join(' ')], code: 0 };
+  if (t[0] === 'python' || t[0] === 'python3') {
+    if (t[1] === '-c') return { lines: dockerPrints(t[2] || ''), code: 0 };
+    if (t[1] && !t[1].startsWith('-')) {
+      const base = t[1].slice(t[1].lastIndexOf('/') + 1);
+      if (has(im.files, base)) return { lines: im.files[base], code: 0 };
+      return { lines: [`python: can't open file '/${t[1].replace(/^\//, '')}': [Errno 2] No such file or directory`], code: 2 };
+    }
+    return { lines: [], code: 0 };
+  }
+  if (t[0] === 'pwd') return { lines: ['/'], code: 0 };
+  if (t[0] === 'ls') return { lines: Object.keys(im.files), code: 0 };
+  return fail(`docker: Error response from daemon: failed to create task for container: exec: "${t[0]}": executable file not found in $PATH: unknown.`);
+}
+function dockerAddLogs(c, lines) {
+  for (const l of lines) c.logs.push(String(l).slice(0, DOCKER_MAX_LOG_LEN));
+  if (c.logs.length > DOCKER_MAX_LOG_LINES) c.logs = c.logs.slice(-DOCKER_MAX_LOG_LINES);
+}
+// Запуск (или перезапуск) контейнера: пишет логи и ставит статус.
+function dockerExecute(c, im) {
+  if (c.cmdOverride === '' && im.kind === 'once') { dockerAddLogs(c, DOCKER_HELLO); c.status = 'exited'; c.code = 0; return; }
+  if (c.cmdOverride === '' && im.kind === 'service') { dockerAddLogs(c, has(DOCKER_SERVICE_LOGS, im.base) ? DOCKER_SERVICE_LOGS[im.base] : ['started']); c.status = 'running'; c.code = 0; return; }
+  const r = dockerRunCmd(im, c.cmdOverride !== '' ? c.cmdArgs : tokenize(im.cmd));
+  dockerAddLogs(c, r.lines);
+  c.status = 'exited';
+  c.code = r.code;
+}
+function dockerPortBusy(d, ports, except) {
+  for (const p of ports) {
+    const busy = d.containers.find(c => c !== except && c.status === 'running' && c.ports.some(q => q.h === p.h));
+    if (busy) fail(`docker: Error response from daemon: driver failed programming external connectivity on endpoint ${busy.name}: Bind for 0.0.0.0:${p.h} failed: port is already allocated.`);
+  }
+}
+function dockerRun(sh, argv) {
+  const args = argv.slice();
+  const d = dockerOf(sh);
+  let detach = false;
+  let name = null;
+  let autoRemove = false;
+  const ports = [];
+  const rest = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (rest.length) { rest.push(a); continue; }
+    if (/^-[a-zA-Z]{2,}$/.test(a)) { args.splice(i, 1, ...a.slice(1).split('').map(ch => `-${ch}`)); i--; continue; }
+    if (/^-p[^=]/.test(a)) { args.splice(i, 1, '-p', a.slice(2)); i--; continue; }
+    if (a === '-d' || a === '--detach') detach = true;
+    else if (a === '--rm') autoRemove = true;
+    else if (a === '-i' || a === '-t' || a === '-it' || a === '-ti') continue;
+    else if (a === '--name' || a.startsWith('--name=')) { name = a === '--name' ? args[++i] : a.slice(7); if (!name) fail("docker: flag needs an argument: --name\nSee 'docker run --help'."); }
+    else if (a === '-p' || a === '--publish' || a.startsWith('-p=') || a.startsWith('--publish=')) {
+      const v = a === '-p' || a === '--publish' ? args[++i] : a.slice(a.indexOf('=') + 1);
+      const m = String(v || '').replace(/\/(tcp|udp)$/, '').match(/^(?:[\d.]+:)?(\d+):(\d+)$/);
+      if (!m) fail(`docker: invalid containerPort: ${v || ''}.\nФормат порта: -p ХОСТ:КОНТЕЙНЕР, например -p 8080:80.\nSee 'docker run --help'.`);
+      ports.push({ h: m[1], c: m[2] });
+    } else if (a === '-e' || a === '--env' || a === '-v' || a === '--volume' || a === '-w') i++;
+    else if (/^(-e=|-v=|-w=|--env=|--volume=)/.test(a)) continue;
+    else if (a.startsWith('-')) fail(`unknown flag: ${a}\nSee 'docker run --help'.`);
+    else rest.push(a);
+  }
+  if (!rest.length) fail('docker: "docker run" requires at least 1 argument.\nSee \'docker run --help\'.\n\nUsage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]');
+  if (name !== null) {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name)) fail(`docker: Error parsing reference: invalid container name (${name}), only [a-zA-Z0-9][a-zA-Z0-9_.-] are allowed.`);
+    const dup = d.containers.find(c => c.name === name);
+    if (dup) fail(`docker: Error response from daemon: Conflict. The container name "/${name}" is already in use by container "${dup.full}". You have to remove (or rename) that container to be able to reuse that name.`);
+  }
+  if (d.containers.length >= DOCKER_MAX_CONTAINERS) fail(`docker: в тренажёре не больше ${DOCKER_MAX_CONTAINERS} контейнеров — удали лишние (docker rm)`);
+  dockerPortBusy(d, ports, null);
+  const ref = dockerRef(rest[0]);
+  const out = [];
+  const im = dockerEnsureImage(sh, ref, out, false);
+  d.seq++;
+  if (name === null) {
+    let k = d.seq;
+    for (let tries = 0; tries < DOCKER_ADJ.length * DOCKER_NOUN.length; tries++, k += 7) {
+      const cand = `${DOCKER_ADJ[k % DOCKER_ADJ.length]}_${DOCKER_NOUN[(k * 3) % DOCKER_NOUN.length]}`;
+      if (!d.containers.some(c => c.name === cand)) { name = cand; break; }
+    }
+    if (name === null) name = `${DOCKER_ADJ[d.seq % DOCKER_ADJ.length]}_${DOCKER_NOUN[d.seq % DOCKER_NOUN.length]}_${d.seq}`;
+  }
+  const full = dockerHex(`ctr:${name}:${d.seq}`, 64);
+  const c = { id: full.slice(0, 12), full, name, image: rest[0], imgName: im.name, imgTag: im.tag, cmdOverride: rest.slice(1).join(' '), cmdArgs: rest.slice(1), ports, logs: [], status: 'exited', code: 0 };
+  dockerExecute(c, im);
+  d.containers.push(c);
+  if (detach) {
+    if (autoRemove && c.status === 'exited') d.containers.splice(d.containers.indexOf(c), 1);
+    out.push(full);
+    return out.join('\n');
+  }
+  out.push(...c.logs);
+  if (c.status === 'running') { c.status = 'exited'; c.code = 130; }
+  if (autoRemove) d.containers.splice(d.containers.indexOf(c), 1);
+  return out.join('\n');
+}
+function dockerPs(sh, args) {
+  const d = dockerOf(sh);
+  const all = args.some(a => a === '-a' || a === '--all' || a === '-qa' || a === '-aq');
+  const quiet = args.some(a => a === '-q' || a === '--quiet' || a === '-qa' || a === '-aq');
+  const list = d.containers.filter(c => all || c.status === 'running').slice().reverse();
+  if (quiet) return list.map(c => c.id).join('\n');
+  const rows = [['CONTAINER ID', 'IMAGE', 'COMMAND', 'CREATED', 'STATUS', 'PORTS', 'NAMES']];
+  for (const c of list) {
+    const im = dockerFindImage(d, c.imgName, c.imgTag);
+    const cmd = c.cmdOverride !== '' ? c.cmdOverride : (im ? im.cmd : '');
+    const shown = cmd.length > 20 ? `${cmd.slice(0, 19)}…` : cmd;
+    const ports = c.ports.map(p => `0.0.0.0:${p.h}->${p.c}/tcp`).join(', ');
+    rows.push([c.id, c.image, `"${shown}"`, 'Less than a second ago', c.status === 'running' ? 'Up Less than a second' : `Exited (${c.code}) Less than a second ago`, ports, c.name]);
+  }
+  return dockerTable(rows);
+}
+function dockerImages(sh, args) {
+  const d = dockerOf(sh);
+  const list = d.images.slice().reverse();
+  if (args.some(a => a === '-q' || a === '--quiet')) return list.map(im => im.id).join('\n');
+  const rows = [['REPOSITORY', 'TAG', 'IMAGE ID', 'CREATED', 'SIZE']];
+  for (const im of list) rows.push([im.name, im.tag, im.id, 'Less than a second ago', im.size]);
+  return dockerTable(rows);
+}
+function dockerEach(sh, sub, args, fn) {
+  const names = args.filter(a => !a.startsWith('-'));
+  if (!names.length) fail(`docker: "docker ${sub}" requires at least 1 argument.\nSee 'docker ${sub} --help'.`);
+  const d = dockerOf(sh);
+  const out = [];
+  for (const n of names) {
+    const c = dockerFindContainer(d, n);
+    if (!c) { out.push(`Error response from daemon: No such container: ${n}`); continue; }
+    const r = fn(d, c, n);
+    if (r) out.push(r);
+  }
+  return out.join('\n');
+}
+function dockerStop(sh, args) {
+  return dockerEach(sh, 'stop', args, (d, c, n) => { if (c.status === 'running') { c.status = 'exited'; c.code = 137; } return n; });
+}
+function dockerStart(sh, args) {
+  return dockerEach(sh, 'start', args, (d, c, n) => {
+    if (c.status === 'running') return n;
+    dockerPortBusy(d, c.ports, c);
+    const im = dockerFindImage(d, c.imgName, c.imgTag);
+    if (!im) return `Error response from daemon: No such image: ${c.image}`;
+    dockerExecute(c, im);
+    return n;
+  });
+}
+function dockerRemove(sh, args) {
+  const force = args.some(a => a === '-f' || a === '--force');
+  return dockerEach(sh, 'rm', args, (d, c, n) => {
+    if (c.status === 'running' && !force) return `Error response from daemon: You cannot remove a running container ${c.full}. Stop the container before attempting removal or force remove`;
+    d.containers.splice(d.containers.indexOf(c), 1);
+    return n;
+  });
+}
+function dockerLogs(sh, args) {
+  const d = dockerOf(sh);
+  let tail = null;
+  const names = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--tail' || a === '-n') tail = Number(args[++i]);
+    else if (a.startsWith('--tail=')) tail = Number(a.slice(7));
+    else if (!a.startsWith('-')) names.push(a);
+  }
+  if (names.length !== 1) fail('docker: "docker logs" requires exactly 1 argument.\nSee \'docker logs --help\'.');
+  const c = dockerFindContainer(d, names[0]);
+  if (!c) fail(`Error response from daemon: No such container: ${names[0]}`);
+  const lines = tail !== null && tail >= 0 ? c.logs.slice(Math.max(0, c.logs.length - tail)) : c.logs;
+  return lines.join('\n');
+}
+function dockerRmi(sh, args) {
+  const force = args.some(a => a === '-f' || a === '--force');
+  const names = args.filter(a => !a.startsWith('-'));
+  if (!names.length) fail('docker: "docker rmi" requires at least 1 argument.\nSee \'docker rmi --help\'.');
+  const d = dockerOf(sh);
+  const out = [];
+  for (const n of names) {
+    const ref = dockerRef(n);
+    const im = d.images.find(x => x.name === ref.name && x.tag === ref.tag) || (n.length >= 3 ? d.images.find(x => x.id.startsWith(n)) : null);
+    if (!im) { out.push(`Error response from daemon: No such image: ${ref.name}:${ref.tag}`); continue; }
+    const user = d.containers.find(c => c.imgName === im.name && c.imgTag === im.tag);
+    if (user && !force) { out.push(`Error response from daemon: conflict: unable to remove repository reference "${im.name}:${im.tag}" (must force) - container ${user.id} is using its referenced image ${im.id}`); continue; }
+    d.images.splice(d.images.indexOf(im), 1);
+    out.push(`Untagged: ${im.name}:${im.tag}`, `Deleted: sha256:${dockerHex(`sha:${im.id}`, 64)}`);
+  }
+  return out.join('\n');
+}
+function dockerPull(sh, args) {
+  const names = args.filter(a => !a.startsWith('-'));
+  if (names.length !== 1) fail('docker: "docker pull" requires exactly 1 argument.\nSee \'docker pull --help\'.');
+  const ref = dockerRef(names[0]);
+  const tr = has(DOCKER_TRAIN, ref.name) ? DOCKER_TRAIN[ref.name] : null;
+  if (!tr) fail(`Error response from daemon: pull access denied for ${ref.name}, repository does not exist or may require 'docker login': denied: requested access to the resource is denied\nВ тренажёре есть учебные образы: ${Object.keys(DOCKER_TRAIN).join(', ')}.`);
+  if (tr.tags.indexOf(ref.tag) < 0) fail(`Error response from daemon: manifest for ${ref.name}:${ref.tag} not found: manifest unknown: manifest unknown\nДоступные теги ${ref.name}: ${tr.tags.join(', ')}.`);
+  const out = ref.typed ? [] : ['Using default tag: latest'];
+  const d = dockerOf(sh);
+  const had = dockerFindImage(d, ref.name, ref.tag);
+  if (!had) dockerEnsureImage(sh, ref, []);
+  out.push(`${ref.tag}: Pulling from library/${ref.name}`, `Digest: sha256:${dockerHex(`dig:${ref.name}:${ref.tag}`, 64)}`, had ? `Status: Image is up to date for ${ref.name}:${ref.tag}` : `Status: Downloaded newer image for ${ref.name}:${ref.tag}`, `docker.io/library/${ref.name}:${ref.tag}`);
+  return out.join('\n');
+}
+function dockerBuild(sh, args) {
+  const d = dockerOf(sh);
+  let tag = null;
+  const pos = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '-t' || a === '--tag') { tag = args[++i]; if (!tag) fail(`docker: flag needs an argument: ${a}\nSee 'docker build --help'.`); }
+    else if (a.startsWith('--tag=')) tag = a.slice(6);
+    else if (a === '-f' || a === '--file') i++;
+    else if (a.startsWith('-')) continue;
+    else pos.push(a);
+  }
+  if (pos.length !== 1) fail('docker: "docker build" requires exactly 1 argument.\nSee \'docker build --help\'.\n\nUsage:  docker build [OPTIONS] PATH | URL | -');
+  const ctx = resolvePath(sh, pos[0]);
+  if (!sh.fs.get(ctx)?.dir) fail(`ERROR: unable to prepare context: path "${pos[0]}" not found`);
+  const prefix = ctx === '/' ? '' : ctx;
+  const df = sh.fs.get(`${prefix}/Dockerfile`);
+  if (!df || df.dir) fail('ERROR: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory\nСоздай файл Dockerfile (с большой буквы) в папке сборки.');
+  const ref = tag === null ? { name: '<none>', tag: '<none>' } : dockerRef(tag);
+  if (tag !== null && !/^[a-z0-9][a-z0-9_.\/-]*$/.test(ref.name)) fail(`ERROR: invalid tag "${tag}": repository name must be lowercase`);
+  // разбор Dockerfile: строки с «\» в конце склеиваем
+  const ins = [];
+  const lines = df.content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+    const no = i + 1;
+    if (!line || line.startsWith('#')) continue;
+    while (line.endsWith('\\') && i + 1 < lines.length) { i++; line = `${line.slice(0, -1).trim()} ${lines[i].trim()}`; }
+    const m = line.match(/^(\S+)\s*([\s\S]*)$/);
+    ins.push({ op: m[1].toUpperCase(), arg: m[2].trim(), no });
+  }
+  if (!ins.length) fail('ERROR: failed to solve: the Dockerfile cannot be empty');
+  const KNOWN_OPS = ['FROM', 'COPY', 'ADD', 'RUN', 'CMD', 'ENTRYPOINT', 'WORKDIR', 'ENV', 'EXPOSE', 'ARG', 'LABEL', 'USER'];
+  for (const x of ins) if (KNOWN_OPS.indexOf(x.op) < 0) fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: unknown instruction: ${x.op}`);
+  const fromAt = ins.findIndex(x => x.op === 'FROM');
+  if (fromAt < 0 || ins.slice(0, fromAt).some(x => x.op !== 'ARG')) fail(`ERROR: failed to solve: dockerfile parse error on line ${ins[0].no}: no build stage in current context\nПервой инструкцией должна быть FROM, например: FROM python:3.12`);
+  const steps = [];
+  const files = {};
+  let cmd = null;
+  let base = null;
+  for (const x of ins) {
+    if (x.op === 'FROM') {
+      const parts = x.arg.split(/\s+/).filter(Boolean);
+      if (parts.length !== 1 && parts.length !== 3) fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: FROM requires either one or three arguments`);
+      base = dockerEnsureImage(sh, dockerRef(parts[0]), [], true);
+      steps.push(`FROM ${parts[0]}`);
+    } else if (x.op === 'COPY' || x.op === 'ADD') {
+      const parts = x.arg.split(/\s+/).filter(p => p && !p.startsWith('--'));
+      if (parts.length < 2) fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: ${x.op} requires at least two arguments, but only ${parts.length} ${parts.length === 1 ? 'was' : 'were'} provided. Destination could not be determined.`);
+      for (const src of parts.slice(0, -1)) {
+        const abs = resolvePath({ cwd: ctx }, src);
+        const inside = abs === ctx || abs.startsWith(`${prefix}/`);
+        if (!inside || !sh.fs.has(abs)) fail(`ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref: "/${src.replace(/^\.?\//, '')}": not found\nФайла «${src}» нет в папке сборки.`);
+        for (const [k, v] of sh.fs) {
+          if (v.dir || !(k === abs || k.startsWith(`${abs}/`))) continue;
+          const b = k.slice(k.lastIndexOf('/') + 1);
+          files[b] = b.endsWith('.py') ? dockerPrints(v.content).slice(0, DOCKER_MAX_LOG_LINES).map(s => s.slice(0, DOCKER_MAX_LOG_LEN)) : [];
+        }
+      }
+      steps.push(`${x.op} ${parts.join(' ')}`);
+    } else if (x.op === 'RUN' || x.op === 'WORKDIR') {
+      if (!x.arg) fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: ${x.op} requires at least one argument`);
+      steps.push(`${x.op} ${x.arg}`);
+    } else if (x.op === 'CMD' || x.op === 'ENTRYPOINT') {
+      if (!x.arg) fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: ${x.op} requires at least one argument`);
+      let text = x.arg;
+      if (text.startsWith('[')) {
+        let arr = null;
+        try { arr = JSON.parse(text); } catch (e) { arr = null; }
+        if (Array.isArray(arr) && arr.every(v => typeof v === 'string')) text = arr.map(v => (/\s/.test(v) ? JSON.stringify(v) : v)).join(' ');
+        else fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: ${x.op} в форме списка должен быть JSON-массивом строк в двойных кавычках: ${x.op} ["python", "app.py"]`);
+      }
+      cmd = text.slice(0, DOCKER_MAX_LOG_LEN);
+    } else if (!x.arg) {
+      fail(`ERROR: failed to solve: dockerfile parse error on line ${x.no}: ${x.op} requires at least one argument`);
+    }
+  }
+  const old = ref.name === '<none>' ? null : dockerFindImage(d, ref.name, ref.tag);
+  if (!old && d.images.length >= DOCKER_MAX_IMAGES) fail(`docker: в тренажёре не больше ${DOCKER_MAX_IMAGES} образов — удали лишние (docker rmi)`);
+  d.seq++;
+  const im = { name: ref.name, tag: ref.tag, id: dockerHex(`img:${ref.name}:${ref.tag}:${d.seq}`, 12), size: base.size, base: base.base, kind: cmd === null ? base.kind : 'script', cmd: cmd === null ? base.cmd : cmd, files: { ...base.files, ...files } };
+  if (old) d.images.splice(d.images.indexOf(old), 1);
+  d.images.push(im);
+  const out = [`[+] Building 0.1s (${steps.length + 2}/${steps.length + 2}) FINISHED`, ' => [internal] load build definition from Dockerfile'];
+  steps.forEach((s, i) => out.push(` => [${i + 1}/${steps.length}] ${s}`));
+  out.push(' => exporting to image', ` => => naming to docker.io/library/${im.name}:${im.tag}`);
+  if (cmd === null) out.push('Предупреждение: в Dockerfile нет CMD — контейнер запустит команду базового образа.');
+  return out.join('\n');
+}
+function dockerCmd(sh, args) {
+  const [sub, ...rest] = args;
+  if (!sub) return `использование: docker <команда> [аргументы]\nКоманды: ${DOCKER_SUBS.join(', ')}`;
+  if (sub === '--version' || sub === '-v' || sub === 'version') return 'Docker version 26.1.4, build 5650f9b';
+  switch (sub) {
+    case 'run': return dockerRun(sh, rest);
+    case 'ps': return dockerPs(sh, rest);
+    case 'images': return dockerImages(sh, rest);
+    case 'stop': return dockerStop(sh, rest);
+    case 'start': return dockerStart(sh, rest);
+    case 'rm': return dockerRemove(sh, rest);
+    case 'rmi': return dockerRmi(sh, rest);
+    case 'logs': return dockerLogs(sh, rest);
+    case 'build': return dockerBuild(sh, rest);
+    case 'pull': return dockerPull(sh, rest);
+    default: return `docker: '${sub}' is not a docker command.\nSee 'docker --help'. В тренажёре есть: ${DOCKER_SUBS.join(', ')}.`;
+  }
+}
+
+function dockerMatch(c, g) {
+  if (g.name != null && c.name !== g.name) return false;
+  if (g.image != null) { const r = dockerRef(g.image); if (c.imgName !== r.name || (r.typed && c.imgTag !== r.tag)) return false; }
+  return true;
+}
+export const GOAL_KINDS = ['dir', 'file', 'noFile', 'cwd', 'gitInit', 'config', 'commits', 'commitMessage', 'tracked', 'staged', 'clean', 'branch', 'onBranch', 'used', 'env', 'imageExists', 'containerRunning', 'containerExited', 'containerPort', 'usedDocker'];
 
 export function checkGoal(shell, g) {
   const sh = shell.state;
@@ -503,6 +898,11 @@ export function checkGoal(shell, g) {
     case 'onBranch': return !!r && r.head === g.name;
     case 'used': return sh.history.some(x => x.trim().replace(/\s+/g, ' ').startsWith(g.cmd));
     case 'env': return has(sh.env, g.name) && (g.value == null || sh.env[g.name] === g.value);
+    case 'imageExists': { const r2 = dockerRef(g.name); const tg = g.tag || (r2.typed ? r2.tag : null); return dockerOf(sh).images.some(im => im.name === r2.name && (tg === null || im.tag === tg)); }
+    case 'containerRunning': return dockerOf(sh).containers.some(c => c.status === 'running' && dockerMatch(c, g));
+    case 'containerExited': return dockerOf(sh).containers.some(c => c.status === 'exited' && (g.code == null || c.code === g.code) && dockerMatch(c, g));
+    case 'containerPort': return dockerOf(sh).containers.some(c => c.status === 'running' && dockerMatch(c, g) && c.ports.some(p => p.h === String(g.host) && p.c === String(g.container)));
+    case 'usedDocker': return sh.history.some(x => { const w = x.trim().split(/\s+/); return w[0] === 'docker' && (!g.sub || w[1] === g.sub); });
     default: return false;
   }
 }
@@ -514,6 +914,7 @@ export function createShell(setup = {}) {
     env: { USER: 'student', HOME, PATH: '/usr/local/bin:/usr/bin:/bin', ...(setup.env || {}) },
     gitConfig: { ...(setup.gitConfig || {}) },
     repo: null,
+    docker: { seq: 0, images: [], containers: [] },
     history: [],
   };
   for (const d of setup.dirs || []) mkdirp(sh, resolvePath(sh, d));

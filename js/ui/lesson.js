@@ -669,6 +669,7 @@ export async function renderLesson(app, discipline, n) {
     const banner = createPhaseBanner({ active: () => app.routeId === my && !evicted });
     pulse = startLivePulse({
       api: withPhase(app.api, banner.onPhase), d: discipline, n, active: () => app.routeId === my && !evicted, onState: boardPanel.onState,
+      getStage: () => (submittedOk ? 'done' : stageOf(lesson, draft)),
       getState: () => {
         if (!submittedOk) return { stage: stageOf(lesson, draft), ...scoreOf(lesson, draft), paste: pasteTotal(draft.paste) };
         const p = app.store.progress(key);

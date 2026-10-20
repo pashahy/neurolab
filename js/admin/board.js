@@ -2,18 +2,21 @@ import { h } from '../util/dom.js';
 import { loadCourse, flatLessons, loadLesson } from '../content.js';
 import { md } from '../util/text.js';
 import { avatarUrl, defaultAvatar } from '../avatars.js';
+import { frameClass } from '../sandbox/cosmetics.js';
 import { errText } from '../ui/login.js';
 import { DISC, select, hashQuery } from './common.js';
 import { GOAL_BONUS, goalShouldCall, goalBarText, goalMarkPct } from './board-goal.js';
 import { defenseBody, defenseExcludeAdd, defenseTaskInfo, defenseTaskTitle, defenseAnswerView } from './board-defense.js';
-import { createLivePanel } from './board-live.js';
+import { createIaView, createIaSwitch, boardMode, nextPref, isStaleReply } from './board-ia-view.js';
 import { hallOverlay } from './board-hall.js';
 import { phaseControl } from './board-phase.js';
 import { createOutroPanel } from './board-outro.js';
 import { teamsOverlay } from './board-teams.js';
-import { tileState, stageLabel, fmtClock, clockOffset, awayElapsed, countPresent, countDone, gridCols } from './board-model.js';
+import { shownState } from './board-away.js';
+import { createAbsentCtl, presentOf, withAbsent } from './board-absent.js';
+import { stageLabel, fmtClock, clockOffset, awayElapsed, countPresent, countDone, gridCols } from './board-model.js';
 
-export const POLL_MS = 12000;
+export const POLL_MS = 5000;
 export const SHORT_LINK = 'pashahy.github.io/neurolab/#/d/';
 
 // Опрос раз в POLL_MS, пока вкладка видима и маршрут жив; ошибки идут в onError, опрос продолжается.
@@ -110,7 +113,6 @@ export async function renderBoard(ctx) {
       h('a', { class: 'board-link', href: `https://${link}`, target: '_blank', rel: 'noopener' }, link),
       countEl,
       defenseBtn,
-      h('button', { class: 'board-ia', type: 'button', onclick: () => setPane(true) }, '📊 Интерактивы'),
       hallBtn,
       h('button', { class: 'board-ia', type: 'button', onclick: () => setOutro(true) }, '🏁 Итог пары'),
       teamsBtn,
@@ -124,19 +126,27 @@ export async function renderBoard(ctx) {
   const doneMark = h('span', { class: 'board-done-mark' });
   const foot = h('footer', { class: 'board-foot' }, doneText, h('div', { class: 'board-done-bar', 'aria-hidden': 'true' }, doneFill, doneMark));
   const celebrate = h('div', { class: 'board-goal-pop', role: 'status', hidden: true }, `🎉 Цель группы достигнута! +${GOAL_BONUS} к рейтингу каждому сдавшему`);
-  // B4: интерактивы — вместо сетки плиток, с кнопкой «к плиткам»
-  const live = createLivePanel({ call: ctx.call, ref: { group, discipline: d, lesson: n }, variant: 'board' });
+  // C2: интерактив активен — доска сама показывает вопрос и результаты (управление — на «Моём экране»)
+  const live = createIaView({ call: ctx.call, ref: { group, discipline: d, lesson: n }, onAct: () => { iaActAt = Date.now(); }, onStop: () => { iaItem = null; lastStarted = null; iaPref = 'question'; syncPane(); } });
+  const iaSwitch = createIaSwitch(m => { iaPref = m; syncPane(); });
+  head.insertBefore(iaSwitch.el, head.querySelector('.board-meta').nextSibling);
   const livePane = h('div', { class: 'board-ia-pane', hidden: true }, live.el);
-  let lastStarted = null;
+  let iaActAt = 0, lastStarted = null, iaPref = 'question', iaItem = null;
   // B6: «Итог пары» — вместо сетки; обновляется раз в 60 с, пока открыт
   const outro = createOutroPanel({ call: ctx.call, ref: { group, discipline: d, lesson: n }, alive: () => alive() });
   const outroPane = h('div', { class: 'board-ia-pane', hidden: true }, outro.el);
   function setOutro(open) { outroPane.hidden = !open; livePane.hidden = true; grid.hidden = open; if (open) outro.open(); else outro.close(); }
-  function setPane(open) { outro.close(); outroPane.hidden = true; livePane.hidden = !open; grid.hidden = open; }
-  live.onToTiles(() => setPane(false));
-  outro.onToTiles(() => setPane(false));
+  function syncPane() {
+    const q = boardMode(iaItem, iaPref) === 'question';
+    outro.close(); outroPane.hidden = true; livePane.hidden = !q; grid.hidden = q;
+    iaSwitch.update(iaItem, boardMode(iaItem, iaPref));
+  }
+  outro.onToTiles(() => { iaPref = 'tiles'; syncPane(); });
+  let lastData = null;
+  const absent = createAbsentCtl({ call: ctx.call, ref: { group, discipline: d, lesson: n }, onChange: (id, f) => { if (lastData) apply(withAbsent(lastData, id, f), Date.now()); }, onError: t => { status.textContent = t; } });
   const boardEl = h('div', { class: 'board' }, head, grid, livePane, outroPane, foot, celebrate);
   root.replaceChildren(boardEl);
+  foot.prepend(absent.strip.el); // C1: полоса «Отсутствуют: N»
   setupDefense();
   hallOverlay(ctx, { group, alive, host: boardEl, button: hallBtn }); // B7: «Зал славы»
   teamsOverlay(ctx, { group, d, n, alive, host: boardEl, button: teamsBtn }); // B8: «Команды» («Открытое занятие»)
@@ -191,6 +201,7 @@ export async function renderBoard(ctx) {
       note.textContent = empty ? 'Пока никто не сдал: защищать некого.' : '';
       if (empty) return;
       pic.src = avatarUrl(def.avatar || defaultAvatar(def.studentId || ''));
+      pic.className = ('defense-avatar ' + frameClass(def.frame)).trim();
       const info = defenseTaskInfo(lesson, def.taskId);
       task.textContent = defenseTaskTitle(info, def.taskId);
       text.replaceChildren(...(info && info.text ? [h('div', { html: md(info.text) })] : []));
@@ -230,12 +241,12 @@ export async function renderBoard(ctx) {
     grid.replaceChildren();
     tiles.clear();
     list.forEach(s => {
-      const img = h('img', { class: 'tile-avatar', src: avatarUrl(s.avatar || defaultAvatar(s.id)), alt: '', width: '256', height: '256', draggable: 'false' });
+      const img = h('img', { class: ('tile-avatar ' + frameClass(s.frame)).trim(), src: avatarUrl(s.avatar || defaultAvatar(s.id)), alt: '', width: '256', height: '256', draggable: 'false' });
       const stage = h('div', { class: 'tile-stage' });
       const score = h('div', { class: 'tile-score' });
       const timer = h('div', { class: 'tile-timer' });
       const badge = h('div', { class: 'tile-badge', 'aria-hidden': 'true' });
-      const el = h('div', { class: 'tile', role: 'listitem' }, badge, h('div', { class: 'tile-pic' }, img), stage, score, timer);
+      const el = h('div', { class: 'tile', role: 'listitem' }, badge, h('div', { class: 'tile-pic' }, img), s.title ? h('div', { class: 'tile-title' }, String(s.title)) : null, stage, score, timer, absent.tileButton(s.id));
       grid.append(el);
       tiles.set(s.id, { el, stage, score, timer, badge, state: '' });
     });
@@ -249,7 +260,7 @@ export async function renderBoard(ctx) {
     students.forEach(s => {
       const t = tiles.get(s.id);
       if (!t) return;
-      const state = tileState(s, now);
+      const state = shownState(s, now);
       if (t.state !== state) {
         const firstPaint = t.state === '';
         const justDone = state === 'done' && !firstPaint;
@@ -267,7 +278,10 @@ export async function renderBoard(ctx) {
   function apply(data, clientNow) {
     if (boardEl.parentNode !== root) root.replaceChildren(boardEl); // после ошибки первого опроса опрос продолжается: вернуть доску
     offset = clockOffset(data.now, clientNow);
-    students = Array.isArray(data.students) ? data.students : [];
+    lastData = data;
+    const all = Array.isArray(data.students) ? data.students : [];
+    students = presentOf(all); // C1: отсутствующие — в полосе внизу, не в плитках и не в счёте
+    absent.strip.update(all);
     const key = students.map(s => s.id).join('|');
     if (key !== ids) { ids = key; build(students); }
     status.textContent = '';
@@ -284,16 +298,19 @@ export async function renderBoard(ctx) {
     checkGoal(dn, clientNow);
     phaseCtl.update(data.phase, data.now, clientNow);
     paint(clientNow);
+    if (isStaleReply(reqAt, iaActAt)) return; // опрос ушёл до «Показать ответ»/«Завершить» — старый вопрос не возвращаем
     live.update(data);
     const it = data.item || null;
-    if (it && it.startedAt !== lastStarted) { lastStarted = it.startedAt; setPane(true); } // запущен новый вопрос — на весь экран
-    if (!it) lastStarted = null;
+    const np = nextPref(lastStarted, it, iaPref);
+    const changed = (!!it !== !!iaItem) || np.started !== lastStarted || np.pref !== iaPref;
+    lastStarted = np.started; iaPref = np.pref; iaItem = it;
+    if (changed) syncPane(); // запущен/завершён вопрос — доска сама переключается
   }
 
-  let first = true;
+  let first = true, reqAt = 0;
   startPoll({
     alive,
-    load: () => ctx.call('boardState', { group, discipline: d, lesson: n }),
+    load: () => { const t0 = Date.now(); return ctx.call('boardState', { group, discipline: d, lesson: n }).then(r => { reqAt = t0; return r; }); },
     apply: (data, now) => { first = false; apply(data, now); },
     onError: e => {
       if (e && e.handled) return;

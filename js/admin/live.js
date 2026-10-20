@@ -1,9 +1,10 @@
 import { h } from '../util/dom.js';
 import { loadCourse, flatLessons } from '../content.js';
 import { avatarUrl, defaultAvatar } from '../avatars.js';
+import { frameClass } from '../sandbox/cosmetics.js';
 import { errText } from '../ui/login.js';
 import { DISC, select, hashQuery, loading, loadError, emptyBox } from './common.js';
-import { tileState, stageLabel, fmtClock, clockOffset, awayElapsed, countPresent, countDone, awaySignal } from './board-model.js';
+import { stageLabel, fmtClock, clockOffset, awayElapsed, countPresent, countDone, awaySignal } from './board-model.js';
 import { goalLine } from './board-goal.js';
 import { startPoll, startTicker } from './board.js';
 import { liveSignals } from './signals-view.js';
@@ -13,6 +14,8 @@ import { createLivePanel } from './board-live.js';
 import { hallPanel } from './board-hall.js';
 import { createCommentForm } from './board-outro.js';
 import { teamsPanel } from './board-teams.js';
+import { shownState } from './board-away.js';
+import { createAbsentCtl, presentOf, withAbsent } from './board-absent.js';
 
 const STATE_TEXT = { none: '', away: 'нет на месте', idle: '💤 не активен', done: 'сдал', active: '' };
 
@@ -68,6 +71,8 @@ export async function renderLive(ctx, main) {
     h('p', { class: 'hint live-note' }, 'Сигналы — повод присмотреться, не доказательство: студент мог уйти по делу или потерять связь.'));
 
   let students = [];
+  let lastData = null;
+  const absent = createAbsentCtl({ call: ctx.call, ref: { group, discipline: d, lesson: n }, onChange: (id, f) => { if (lastData) apply(withAbsent(lastData, id, f), Date.now()); }, onError: t => { status.textContent = t; } });
   let offset = 0;
   const rows = new Map();
   let ids = '';
@@ -81,11 +86,12 @@ export async function renderLive(ctx, main) {
       const score = h('span', { class: 'live-score' });
       const state = h('div', { class: 'live-state' });
       const sig = h('div', { class: 'live-signal' });
+      const abs = absent.rowButton(s.id);
       const el = h('li', { class: 'live-row' },
-        h('img', { class: 'live-avatar', src: avatarUrl(s.avatar || defaultAvatar(s.id)), alt: '', width: '56', height: '56' }),
-        h('div', { class: 'live-body' }, name, h('div', { class: 'live-line' }, stage, score), state, sig));
+        h('img', { class: ('live-avatar ' + frameClass(s.frame)).trim(), src: avatarUrl(s.avatar || defaultAvatar(s.id)), alt: '', width: '56', height: '56' }),
+        h('div', { class: 'live-body' }, name, h('div', { class: 'live-line' }, stage, score), state, sig), abs.el);
       list.append(el);
-      rows.set(s.id, { el, stage, score, state, sig });
+      rows.set(s.id, { el, stage, score, state, sig, abs });
     });
   }
 
@@ -94,24 +100,28 @@ export async function renderLive(ctx, main) {
     students.forEach(s => {
       const r = rows.get(s.id);
       if (!r) return;
-      const st = tileState(s, now);
+      const st = shownState(s, now);
       r.el.className = `live-row live-${st}`;
       r.stage.textContent = stageLabel(s.stage);
       r.score.textContent = st === 'none' ? '' : `${s.score == null ? 0 : s.score}/${s.max == null ? 0 : s.max}`;
       r.state.textContent = st === 'away' ? `нет на месте ${fmtClock(awayElapsed(s.awaySince, offset, clientNow))}` : STATE_TEXT[st];
       r.sig.textContent = [awaySignal(s), ...liveSignals(s)].filter(Boolean).join(' · ');
+      r.abs.set(s.absent);
+      if (s.absent) { r.el.className = 'live-row live-absent'; r.state.textContent = 'нет на паре'; r.score.textContent = ''; }
     });
   }
 
   function apply(data, clientNow) {
     offset = clockOffset(data.now, clientNow);
+    lastData = data;
     students = Array.isArray(data.students) ? data.students : [];
     const key = students.map(s => s.id).join('|');
     if (key !== ids) { ids = key; build(); }
     if (!students.length) list.replaceChildren(h('li', {}, emptyBox('В группе нет активных студентов.')));
     status.textContent = '';
-    const p = countPresent(students, data.now);
-    const dn = countDone(students);
+    const act = presentOf(students); // C1: без отсутствующих
+    const p = countPresent(act, data.now);
+    const dn = countDone(act);
     goalEl.textContent = goalLine(dn.x, dn.y, data.goal);
     countEl.textContent = `На занятии ${p.x} из ${p.y} · сдали ${dn.x} из ${dn.y}`;
     defensePart.update(data.defense || null);
