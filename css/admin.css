@@ -251,3 +251,6 @@ ol.sum-list { counter-reset: sum; }
 @media (hover: hover) and (max-width: 720px) {
   .rtable tbody tr:hover td { background: transparent; }
 }
+
+.sig-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.sig-chip { padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; background: var(--warn-bg, #fff3cd); color: var(--warn, #7a5b00); border: 1px solid currentColor; }

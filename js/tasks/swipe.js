@@ -1,6 +1,6 @@
 import { h } from '../util/dom.js';
 import { mdInline } from '../util/text.js';
-import { fraction } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 const LABELS = { true: 'Правда', false: 'Выдумка' };
 
@@ -16,7 +16,7 @@ export default {
     return e;
   },
   ready: (t, a) => Array.isArray(a) && a.length === t.cards.length && a.every(x => typeof x === 'boolean'),
-  check(t, a) { return fraction(t, t.cards.filter((c, i) => Array.isArray(a) && a[i] === c.answer).length, t.cards.length); },
+  check: (t, a) => checkKey(taskKey(t, 'swipe'), a),
   solution: t => t.cards.map(c => c.answer),
   render(t, el, { answer, onChange, locked }) {
     const labels = { ...LABELS, ...t.labels };

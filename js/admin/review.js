@@ -7,6 +7,7 @@ import { errText } from '../ui/login.js';
 import { discCode, select, fmtTime, hashQuery, loading, loadError, emptyBox } from './common.js';
 import { reviewHref } from './review-team.js';
 import { workSignals, SIGNALS_NOTE } from './signals-view.js';
+import { signalChips, signalCodes, SIGNALS_HINT } from './anticheat-signals.js';
 import { defenseScoreText } from './board-defense.js';
 
 const own = (o, k) => o != null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
@@ -99,6 +100,7 @@ export async function renderReview(ctx, main) {
         h('span', { class: 'review-main' }, h('strong', {}, q.name), h('span', { class: 'muted' }, ` · ${q.group}`)),
         h('span', { class: 'review-sub' }, `${discCode(q.discipline)} · ПЗ ${q.lesson}${q.title ? `. ${q.title}` : ''}`),
         h('span', { class: 'review-meta' }, `${fmtTime(q.time)} · заданий к проверке: ${Array.isArray(q.tasks) ? q.tasks.length : 0}`)),
+      signalChips(q.alerts),
       files.length ? h('div', { class: 'review-files' }, files.map(f => fileRow(ctx, f))) : '');
   })));
 }
@@ -199,6 +201,8 @@ export async function renderWork(ctx, main) {
       const i = list.findIndex(t => t.id === id);
       return i >= 0 ? `задание ${i + 1}` : id;
     });
+    const codes = signalCodes(a.alerts).length ? a.alerts : (cur === attempts.length - 1 ? sub.alerts : null);
+    if (signalCodes(codes).length) summary.append(h('div', { class: 'work-signals' }, h('strong', {}, 'Сигналы защиты баллов'), signalChips(codes), h('p', { class: 'hint' }, SIGNALS_HINT)));
     if (sigLines.length) {
       summary.append(h('div', { class: 'work-signals' }, h('strong', {}, 'Сигналы'), h('ul', {}, sigLines.map(x => h('li', {}, x))), h('p', { class: 'hint' }, SIGNALS_NOTE)));
     }

@@ -1,6 +1,7 @@
 import { h } from '../util/dom.js';
 import { mdInline } from '../util/text.js';
-import { fraction, isIdx } from './common.js';
+import { isIdx } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 export default {
   manual: false,
@@ -11,12 +12,7 @@ export default {
     return e;
   },
   ready: (t, a) => Array.isArray(a) && a.length > 0,
-  check(t, a) {
-    const sel = new Set(Array.isArray(a) ? a : []);
-    const hits = t.correct.filter(i => sel.has(i)).length;
-    const fp = [...sel].filter(i => !t.correct.includes(i)).length;
-    return fraction(t, Math.max(0, hits - fp), t.correct.length);
-  },
+  check: (t, a) => checkKey(taskKey(t, 'hotspot'), a),
   solution: t => [...t.correct].sort((a, b) => a - b),
   render(t, el, { answer, onChange, locked }) {
     const sel = new Set(Array.isArray(answer) ? answer : []);

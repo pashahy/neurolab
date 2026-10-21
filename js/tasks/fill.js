@@ -1,6 +1,6 @@
 import { h, add } from '../util/dom.js';
 import { norm } from '../util/text.js';
-import { fraction } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 const RE = /\{\{(\d+)\}\}/g;
 
@@ -15,10 +15,7 @@ export default {
     return e;
   },
   ready: (t, a) => Array.isArray(a) && a.length === t.blanks.length && a.every(x => String(x ?? '').trim()),
-  check(t, a) {
-    const good = t.blanks.filter((acc, i) => Array.isArray(a) && acc.map(norm).includes(norm(a[i]))).length;
-    return fraction(t, good, t.blanks.length);
-  },
+  check: (t, a) => checkKey(taskKey(t, 'fill'), a),
   solution: t => t.blanks.map(b => b[0]),
   render(t, el, { answer, onChange, locked }) {
     const vals = Array.isArray(answer) ? [...answer] : t.blanks.map(() => '');

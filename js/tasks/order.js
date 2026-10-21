@@ -1,12 +1,12 @@
 import { h } from '../util/dom.js';
 import { mdInline, shuffledIndices } from '../util/text.js';
-import { fraction } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 export default {
   manual: false,
   validate: t => (Array.isArray(t.items) && t.items.length >= 3 ? [] : ['order: нужно ≥3 items в правильном порядке']),
   ready: (t, a) => Array.isArray(a) && a.length === t.items.length,
-  check(t, a) { return fraction(t, Array.isArray(a) ? a.filter((v, i) => v === i).length : 0, t.items.length); },
+  check: (t, a) => checkKey(taskKey(t, 'order'), a),
   solution: t => t.items.map((_, i) => i),
   render(t, el, { answer, onChange, locked }) {
     const cur = Array.isArray(answer) ? [...answer] : shuffledIndices(t.items.length);

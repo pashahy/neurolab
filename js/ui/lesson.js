@@ -20,6 +20,7 @@ import { homeworkV4, homeworkChooser } from './homework.js';
 import { withPhase, createPhaseBanner } from '../live-phase.js';
 import { startLivePulse, stageOf, scoreOf } from '../live-pulse.js';
 import { addPaste, pasteTotal, buildSignals } from '../signals-v4.js';
+import { reportLessonOpen } from '../lesson-open.js';
 import { mountBoardPanel } from '../live-board-client.js';
 import { createTeamCtl, gate as teamGate, banner as teamBanner, footer as teamFooter } from './team.js';
 const safeStorage = () => { try { return globalThis.localStorage; } catch { return null; } };
@@ -49,6 +50,7 @@ export async function renderLesson(app, discipline, n) {
     app.root.replaceChildren(h('div', { class: 'card' }, h('p', {}, '🔒 Это занятие пока закрыто преподавателем.'), h('a', { class: 'btn', href: back }, '← К карте курса')));
     return;
   }
+  if (!preview && app.store.session()) reportLessonOpen({ api: app.api, discipline, lesson: lesson.number != null ? lesson.number : n });
   const deadline = preview ? null : deadlineInfo(acc, n);
   // блок оценки преподавателя для ручного задания; оценки берём из кэша (обновляются при входе и на карте курса)
   const teacherBlock = t => {

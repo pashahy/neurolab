@@ -1,6 +1,6 @@
 import { h } from '../util/dom.js';
 import { mdInline, shuffledIndices } from '../util/text.js';
-import { fraction } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 const COLORS = 6;
 
@@ -13,7 +13,7 @@ export default {
     return new Set(r).size === r.length ? [] : ['match: правые части должны быть уникальны'];
   },
   ready: (t, a) => Array.isArray(a) && a.length === t.pairs.length && a.every(Number.isInteger),
-  check(t, a) { return fraction(t, Array.isArray(a) ? a.filter((v, i) => v === i).length : 0, t.pairs.length); },
+  check: (t, a) => checkKey(taskKey(t, 'match'), a),
   solution: t => t.pairs.map((_, i) => i),
   render(t, el, { answer, onChange, locked }) {
     const ans = Array.isArray(answer) ? [...answer] : t.pairs.map(() => null);

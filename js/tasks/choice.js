@@ -1,6 +1,7 @@
 import { h, add } from '../util/dom.js';
 import { mdInline } from '../util/text.js';
-import { pts, isIdx } from './common.js';
+import { isIdx } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 function render(multi) {
   return (t, el, { answer, onChange, locked }) => {
@@ -38,7 +39,7 @@ export const single = {
     return e;
   },
   ready: (t, a) => Number.isInteger(a),
-  check: (t, a) => ({ score: a === t.correct ? pts(t) : 0, max: pts(t) }),
+  check: (t, a) => checkKey(taskKey(t, 'single'), a),
   solution: t => t.correct,
   render: render(false),
 };
@@ -52,10 +53,7 @@ export const multi = {
     return e;
   },
   ready: (t, a) => Array.isArray(a) && a.length > 0,
-  check(t, a) {
-    const ok = Array.isArray(a) && a.length === t.correct.length && t.correct.every(i => a.includes(i));
-    return { score: ok ? pts(t) : 0, max: pts(t) };
-  },
+  check: (t, a) => checkKey(taskKey(t, 'multi'), a),
   solution: t => [...t.correct].sort((a, b) => a - b),
   render: render(true),
 };

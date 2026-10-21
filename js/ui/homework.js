@@ -122,7 +122,7 @@ export function homeworkV4(ctx, startLevel) {
       try {
         grade = gradeHomework(lesson, level, hd.answers);
         mark = homeworkMark({ score: grade.score, max: grade.max, level });
-        if (!preview) sub = buildHomeworkSubmission({ profile: app.store.profile(), discipline, lesson, level, grade, startedAt: hd.startedAt });
+        if (!preview) sub = buildHomeworkSubmission({ profile: app.store.profile(), discipline, lesson, level, grade, startedAt: hd.startedAt, answers: hd.answers });
         rec = bank(ctx).recordHomework(key, { score: grade.score, max: grade.max, level, mark, at: new Date().toISOString() });
         app.store.clearDraft(hwKey);
         hd = repairHomeworkDraft(null, lesson);

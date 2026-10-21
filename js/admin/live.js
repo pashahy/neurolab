@@ -8,6 +8,7 @@ import { stageLabel, fmtClock, clockOffset, awayElapsed, countPresent, countDone
 import { goalLine } from './board-goal.js';
 import { startPoll, startTicker } from './board.js';
 import { liveSignals } from './signals-view.js';
+import { signalTexts } from './anticheat-signals.js';
 import { phaseControl } from './board-phase.js';
 import { defensePanel } from './live-defense.js';
 import { createLivePanel } from './board-live.js';
@@ -105,7 +106,7 @@ export async function renderLive(ctx, main) {
       r.stage.textContent = stageLabel(s.stage);
       r.score.textContent = st === 'none' ? '' : `${s.score == null ? 0 : s.score}/${s.max == null ? 0 : s.max}`;
       r.state.textContent = st === 'away' ? `нет на месте ${fmtClock(awayElapsed(s.awaySince, offset, clientNow))}` : STATE_TEXT[st];
-      r.sig.textContent = [awaySignal(s), ...liveSignals(s)].filter(Boolean).join(' · ');
+      r.sig.textContent = [awaySignal(s), ...liveSignals(s), ...signalTexts(s.alerts)].filter(Boolean).join(' · ');
       r.abs.set(s.absent);
       if (s.absent) { r.el.className = 'live-row live-absent'; r.state.textContent = 'нет на паре'; r.score.textContent = ''; }
     });

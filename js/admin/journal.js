@@ -2,6 +2,7 @@ import { h } from '../util/dom.js';
 import { DISC, select, hashQuery, loading, loadError, emptyBox } from './common.js';
 import { errText } from '../ui/login.js';
 import { defenseJournalCell, defenseJournalText } from './board-defense.js';
+import { signalTexts } from './anticheat-signals.js';
 
 const own = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
 const SUSPICIOUS_TIP = 'Подозрительно: идеальный автобалл быстрее чем за 3 минуты или больше 5 попыток за день. Проверьте строки студента в листе «Ответы».';
@@ -95,10 +96,10 @@ export async function renderJournal(ctx, main) {
     const markLine = mark ? h('span', { class: `jmark${mark.preliminary ? ' prelim' : ''}` }, mark.text, mark.preliminary ? h('span', { class: 'jprelim' }, 'предв.') : '') : '';
     const pct = c.max > 0 ? `${Math.round(c.best / c.max * 100)}%` : '—';
     const marks = [c.manual === 'pending' ? '⏳' : '', c.manual === 'graded' ? '💬' : '', c.late ? '⏰' : '', c.variant === 'pc' ? '💻' : ''].filter(Boolean).join('');
-    const note = [`автобалл ${c.best} из ${c.max}`, mark ? `отметка ${mark.text}${mark.preliminary ? ' (предварительная)' : ''}` : '', hw ? `${hw.label} ${hw.text}` : '', c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`, c.suspicious ? 'подозрительно: идеал быстрее 3 минут или больше 5 попыток за день' : '', dtext ? `защита ${dtext.slice(3)}` : ''].filter(Boolean).join(', ');
+    const note = [`автобалл ${c.best} из ${c.max}`, mark ? `отметка ${mark.text}${mark.preliminary ? ' (предварительная)' : ''}` : '', hw ? `${hw.label} ${hw.text}` : '', c.manual === 'pending' ? 'ждёт ручной проверки' : '', c.manual === 'graded' ? `оценено вручную: ${c.manualScore}` : '', c.late ? 'после срока' : '', c.variant === 'pc' ? 'ПК-вариант' : '', `попыток: ${c.attempts}`, c.suspicious ? 'подозрительно: идеал быстрее 3 минут или больше 5 попыток за день' : '', signalTexts(c.alerts).length ? `сигналы: ${signalTexts(c.alerts).join('; ')} (повод присмотреться, не доказательство)` : '', dtext ? `защита ${dtext.slice(3)}` : ''].filter(Boolean).join(', ');
     return h('td', { class: 'jcell' }, h('a', { class: `jlink${c.late ? ' late' : ''}`, href: workHref(s.id, disc, n), title: note, 'aria-label': `${s.name}, ПЗ ${n}: ${note}` },
       h('span', { class: 'jpct' }, pct), markLine, hwLine, dtext ? h('span', { class: 'jdefense' }, dtext) : '', marks ? h('span', { class: 'jmarks', 'aria-hidden': 'true' }, marks) : '',
-      c.suspicious === true ? h('span', { class: 'jwarn', title: SUSPICIOUS_TIP, 'aria-hidden': 'true' }, '⚠') : ''));
+      (c.suspicious === true || signalTexts(c.alerts).length) ? h('span', { class: 'jwarn', title: SUSPICIOUS_TIP + (signalTexts(c.alerts).length ? ` Сигналы: ${signalTexts(c.alerts).join('; ')}.` : ''), 'aria-hidden': 'true' }, '⚠') : ''));
   };
 
   body.replaceChildren(

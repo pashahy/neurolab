@@ -1,5 +1,5 @@
 import { h, add } from '../util/dom.js';
-import { pts } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 // «1 234,5» → 1234.5; всё, что не является десятичным числом целиком («12abc», «0x10», «1e3», «1,234.5»), → NaN
 const NUM = /^[+-]?\d+(\.\d+)?$/;
@@ -23,7 +23,7 @@ export default {
     return e;
   },
   ready: (t, a) => Number.isFinite(parseNum(a)),
-  check: (t, a) => ({ score: ok(t, a) ? pts(t) : 0, max: pts(t) }),
+  check: (t, a) => checkKey(taskKey(t, 'numeric'), a),
   solution: t => String(t.answer),
   toText: (t, a) => String(a ?? ''),
   render(t, el, { answer, onChange, locked }) {

@@ -1,6 +1,6 @@
 import { h } from '../util/dom.js';
 import { shuffledIndices } from '../util/text.js';
-import { fraction } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 export const KINDS = { role: 'Роль', context: 'Контекст', task: 'Задача', format: 'Формат', constraints: 'Ограничения', examples: 'Примеры', steps: 'Шаги' };
 
@@ -18,12 +18,7 @@ export default {
     return e;
   },
   ready: (t, a) => Array.isArray(a?.selected) && a.selected.length > 0,
-  check(t, a) {
-    const sel = Array.isArray(a?.selected) ? a.selected : [];
-    const good = sel.filter(i => t.blocks[i]?.good === true).length;
-    const bad = sel.filter(i => t.blocks[i]?.good === false).length;
-    return fraction(t, Math.max(0, good - bad), t.blocks.filter(b => b.good).length);
-  },
+  check: (t, a) => checkKey(taskKey(t, 'prompt-builder'), a),
   solution: t => ({ selected: t.blocks.flatMap((b, i) => (b.good ? [i] : [])), extra: '' }),
   toText: (t, a) => [...(a.selected || []).map(i => t.blocks[i]?.text), a.extra].filter(Boolean).join('\n'),
   render(t, el, { answer, onChange, locked }) {

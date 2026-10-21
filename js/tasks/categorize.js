@@ -1,6 +1,7 @@
 import { h } from '../util/dom.js';
 import { mdInline } from '../util/text.js';
-import { fraction, isIdx } from './common.js';
+import { isIdx } from './common.js';
+import { taskKey, checkKey } from '../grade-core.js';
 
 export default {
   manual: false,
@@ -12,7 +13,7 @@ export default {
     return e;
   },
   ready: (t, a) => Array.isArray(a) && a.length === t.items.length && a.every(Number.isInteger),
-  check(t, a) { return fraction(t, t.items.filter((it, i) => Array.isArray(a) && a[i] === it.cat).length, t.items.length); },
+  check: (t, a) => checkKey(taskKey(t, 'categorize'), a),
   solution: t => t.items.map(it => it.cat),
   render(t, el, { answer, onChange, locked }) {
     const ans = Array.isArray(answer) ? [...answer] : t.items.map(() => null);
