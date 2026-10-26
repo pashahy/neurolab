@@ -50,7 +50,7 @@ function getWorker() {
       for (const [id, p] of pending) if (p.worker === w) { if (p.pkgs) { if (p.onProgress) p.onProgress('packages'); } else arm(id, EXEC_MS, LOOP_MSG); }
       return;
     }
-    if (data.type === 'loadError') { kill(w, `Не удалось загрузить Python: ${data.error}. Проверьте интернет.`); return; }
+    if (data.type === 'loadError') { kill(w, `Не удалось загрузить Python: ${data.error}.`); return; }
     // этапы загрузки пакетов; поле runId (не id): старый раннер из кэша такие сообщения молча пропускает
     if (data.type === 'progress') { const p = pending.get(data.runId); if (p && p.onProgress) p.onProgress(data.stage, data.text); return; }
     if (data.type === 'packagesError') { if (pending.has(data.id)) kill(w, PKG_MSG, true); return; }

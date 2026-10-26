@@ -2,9 +2,15 @@
 /* global importScripts, loadPyodide */
 let ready;
 try {
-  importScripts('https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js');
+  importScripts('./pyodide-loader.js');
+  const siteBase = new URL('../../vendor/pyodide/0.26.4/', self.location.href).href;
   ready = (async () => {
-    const py = await loadPyodide();
+    const { py } = await self.PyodideLoader.load({
+      sources: self.PyodideLoader.sources(siteBase),
+      importScripts: u => importScripts(u),
+      fetch: (u, o) => fetch(u, o),
+      loadPyodide: o => loadPyodide(o),
+    });
     const src = await (await fetch('./pyharness.py')).text();
     py.runPython(src);
     return py;
