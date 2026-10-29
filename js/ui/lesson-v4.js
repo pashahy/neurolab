@@ -10,6 +10,7 @@ import { TASK_TYPES } from '../tasks/registry.js';
 import { gradeLesson } from '../grading.js';
 import { mistakeItems, reflectionFilled, lessonMark, MARK_LABEL, NEXT_MIN, NEXT_MAX } from '../grading-v4.js';
 import { hasVariants, allTasks, sortedGlossary } from '../lesson-model.js';
+import { sealedNext, sealedResultCard } from './control.js';
 import { stageMinutes, warmupTasks, baseTasks, advTasks, isAdv, safetyRules, safetyChecks, practiceV4, MISTAKE_REASONS } from '../lesson-v4.js';
 import { CHARACTERS } from '../../content/story.js';
 
@@ -344,9 +345,10 @@ const SELF_LEVELS = [[2, '✅', 'Умею'], [1, '🟡', 'Частично'], [0
 
 export function reflectV4(ctx) {
   const { view, lesson, draft, save, show, header, tools, grid, switchVariant, deadlineNote, preview, openGlossary, submit } = ctx;
+  const sealed = !!(ctx.sealed && ctx.sealed()); // контрольная: баллы, ошибки и отметка скрыты до окончания
   const variant = draft.variant;
   const grade = gradeLesson(lesson, draft.answers, variant);
-  const mistakes = mistakeItems(lesson, draft.answers, variant);
+  const mistakes = sealed ? [] : mistakeItems(lesson, draft.answers, variant);
   const refl = draft.reflection;
   const goalTasks = Array.isArray(lesson.goal && lesson.goal.tasks) ? lesson.goal.tasks : [];
   const practice = practiceV4(lesson, variant);
@@ -429,6 +431,7 @@ export function reflectV4(ctx) {
   const errLine = h('p', { class: 'error', role: 'alert' });
   const gateNote = h('p', { class: 'hint refl-gate', 'aria-live': 'polite' });
   const submitBtn = h('button', { class: 'btn primary big', type: 'button', onclick: () => {
+    if (sealed) sealedNext(refl, NEXT_MIN);
     if (!reflectionFilled(lesson, draft.answers, variant, refl)) return;
     submitBtn.disabled = true;
     draft.stage = 'finish'; // 'finish' у v4 — «сдаётся»: если сдача не дошла до конца, перезагрузка вернёт на этот экран
@@ -438,7 +441,7 @@ export function reflectV4(ctx) {
   function refreshGate() {
     const left = refl.tasks.filter(v => v === null).length;
     const need = mistakes.length > 0 && refl.next.trim().length < NEXT_MIN;
-    const ok = reflectionFilled(lesson, draft.answers, variant, refl);
+    const ok = sealed ? refl.tasks.every(v => v !== null) : reflectionFilled(lesson, draft.answers, variant, refl);
     submitBtn.disabled = !ok;
     gateNote.textContent = ok ? (preview ? 'Демо: работа никуда не отправляется.' : '') : [left ? `Оцените все задачи цели (осталось: ${left}).` : '', need ? `Напишите, что сделаете в следующий раз: от ${NEXT_MIN} символов.` : ''].filter(Boolean).join(' ');
     counter.textContent = mistakes.length ? `${refl.next.trim().length} / ${NEXT_MAX}, нужно от ${NEXT_MIN}` : `${refl.next.trim().length} / ${NEXT_MAX}`;
@@ -446,8 +449,8 @@ export function reflectV4(ctx) {
   refreshGate();
 
   view.append(header(), tools(true, false, true), grid('reflect', null, [
-    goalCard, doneCard, mistakesCard,
-    markCard(grade, 'Предварительная отметка'),
+    goalCard, sealed ? '' : doneCard, sealed ? '' : mistakesCard,
+    sealed ? sealedResultCard() : markCard(grade, 'Предварительная отметка'),
     deadlineNote(),
     submitBtn, gateNote, errLine,
     h('button', { class: 'btn ghost big', type: 'button', onclick: () => { draft.stage = 'task'; draft.index = 0; save(); show(); } }, '↩ К заданиям'),

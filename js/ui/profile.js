@@ -1,4 +1,6 @@
 import { h, add } from '../util/dom.js';
+import { weakSpotsCard } from './weak-spots.js';
+import { installHint } from '../pwa.js';
 import { AVATARS, avatarUrl, defaultAvatar } from '../avatars.js';
 import { LAB_AVATARS } from '../avatars-v2.js';
 import { titleView } from '../sandbox/title-view.js';
@@ -155,7 +157,10 @@ export function renderProfile(app) {
     h('a', { href: '#/', class: 'back' }, '← Главная'),
     h('h1', { class: 'display' }, 'Профиль'),
     h('dl', { class: 'card profile' }, row('ФИО', p.name), row('Группа', p.group), row('Логин', p.login)),
+    weakSpotsCard(app),
+    h('a', { class: 'btn big', href: '#/portfolio' }, 'Портфолио'),
     ...cosmetics(app, p),
     pending ? h('p', { class: 'hint' }, `⏳ Не отправлено работ: ${pending}.`) : '',
+    installHint() || '',
     exitBtn, confirmBox);
 }

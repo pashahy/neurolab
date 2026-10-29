@@ -1,0 +1,23 @@
+/* Портфолио студента (#/portfolio): экран и печать A4. Тёмная тема на экране — из общих переменных (--surface, --text).
+   Правила печати действуют только при body.pf-print (ставит app.js на маршруте портфолио), другие экраны не затрагиваются. */
+.pf-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 16px; }
+.pf-body .card { margin: 0 0 16px; }
+.pf-body h2 { margin: 0 0 8px; }
+.pf-list { margin: 0; padding-left: 20px; }
+.pf-work { margin: 0 0 10px; }
+.pf-name { overflow-wrap: anywhere; }
+
+/* именованная страница: размер и поля только у корня портфолио */
+@page portfolio { size: A4; margin: 15mm; }
+body.pf-print #app { page: portfolio; }
+@media print {
+  body.pf-print, body.pf-print #app { background: #fff !important; color: #000 !important; }
+  body.pf-print::before, body.pf-print::after, body.pf-print .orb, body.pf-print .orbs, body.pf-print nav, body.pf-print header, body.pf-print footer,
+  body.pf-print .nav, body.pf-print .tabbar, body.pf-print .pf-noprint, body.pf-print button, body.pf-print .back { display: none !important; }
+  body.pf-print #app { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  /* печать всегда светлая, даже при тёмной теме экрана */
+  body.pf-print .pf-body .card { background: #fff !important; color: #000 !important; border: 1px solid #000 !important; box-shadow: none !important; border-radius: 0 !important; break-inside: avoid; page-break-inside: avoid; }
+  body.pf-print .pf-body *, body.pf-print .pf-body .hint { color: #000 !important; background: transparent !important; }
+  body.pf-print .pf-work { break-inside: avoid; page-break-inside: avoid; }
+  body.pf-print h1.display { color: #000 !important; background: none !important; -webkit-text-fill-color: #000 !important; }
+}

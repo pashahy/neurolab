@@ -8,6 +8,7 @@ import { createAccountRefresh } from './account-refresh.js';
 import { liveCapable } from './submit-status.js';
 import { API_URL } from './config.js';
 import { h } from './util/dom.js';
+import { registerPWA } from './pwa.js';
 import { safeNext, expiryNext, identityChanged } from './nav.js';
 import { lessonKey } from './store.js';
 import { renderLogin } from './ui/login.js';
@@ -16,6 +17,7 @@ import { renderHome } from './ui/home.js';
 import { renderCourse } from './ui/course.js';
 import { renderLesson } from './ui/lesson.js';
 import { renderRating } from './ui/rating.js';
+import { renderPortfolio } from './ui/portfolio.js';
 import { renderSandbox } from './ui/sandbox.js';
 import { renderAdmin } from './admin/app.js';
 
@@ -167,11 +169,12 @@ function route() {
   app.root.replaceChildren();
   app.root.classList.toggle('admin-root', a === 'admin');
   document.body.classList.toggle('no-orbs', a === 'admin'); // без светящихся пятен на экранах админ-панели
+  document.body.classList.toggle('pf-print', a === 'portfolio'); // правила печати портфолио (css/portfolio.css) только на его маршруте
   const lessonRoute = a === 'd' && b && c;
   // главная и карта курса: на широком экране контейнер до 1200 px
-  app.root.classList.toggle('wide', !lessonRoute && !isDemo(a) && !['login', 'admin', 'rating', 'profile', 'sandbox'].includes(a));
+  app.root.classList.toggle('wide', !lessonRoute && !isDemo(a) && !['login', 'admin', 'rating', 'profile', 'portfolio', 'sandbox'].includes(a));
   window.scrollTo(0, 0);
-  const needsMe = a !== 'login' && !isDemo(a) && a !== 'rating' && a !== 'profile' && a !== 'sandbox'; // главная, карта курса, занятие
+  const needsMe = a !== 'login' && !isDemo(a) && a !== 'rating' && a !== 'profile' && a !== 'portfolio' && a !== 'sandbox'; // главная, карта курса, занятие
   const render = () => {
     if (a === 'd' && b && c) return renderLesson(app, b, Number(c));
     if (a === 'd' && b) return renderCourse(app, b);
@@ -184,6 +187,7 @@ function route() {
   else if (a === 'rating') job = renderRating(app);
   else if (a === 'sandbox') job = renderSandbox(app, [b, c].filter(Boolean), query);
   else if (a === 'profile') job = renderProfile(app);
+  else if (a === 'portfolio') job = renderPortfolio(app);
   else if (!lessonRoute && store.me()) { job = render(); } // главная и карта: показываем сохранённое, обновляем в фоне
   else job = gated(id, lessonRoute, render);
   if (a !== 'login' && !isDemo(a) && a !== 'admin' && !lessonRoute && !(needsMe && !store.me())) softRefresh(id);
@@ -239,3 +243,4 @@ document.addEventListener('visibilitychange', () => {
 });
 route();
 flushUI();
+registerPWA();

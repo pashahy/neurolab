@@ -1,5 +1,6 @@
 import { h } from '../util/dom.js';
 import { errText } from '../ui/login.js';
+import { controlBlock } from './control.js';
 import { DISC, fmtOpen, parseOpen, loadError, emptyBox } from './common.js';
 
 const normGroup = g => String(g || '').toUpperCase().replace(/\s+/g, '');
@@ -102,5 +103,6 @@ function accessForm(ctx, group, disc, row) {
     teamNote,
     h('div', { class: 'field' }, h('span', {}, 'Сроки сдачи'), dlBox,
       h('button', { class: 'btn small', type: 'button', onclick: () => dlRow(null, '') }, '➕ Добавить срок')),
-    err, msg, btn);
+    err, msg, btn,
+    controlBlock(ctx, group, disc.id));
 }

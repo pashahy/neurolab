@@ -2,6 +2,7 @@ import { h } from '../util/dom.js';
 import { passwordField, errText } from '../ui/login.js';
 import { checkStorage } from '../upload.js';
 import { loadError } from './common.js';
+import { methodistSettingsCard } from './methodist.js';
 
 const DEFAULT_ENDPOINT = 'https://storage.yandexcloud.net';
 // Скрипт таблицы v2 не знает действий хранилища и отвечает «unknown action».
@@ -25,7 +26,7 @@ export async function renderSettings(ctx, main) {
     return;
   }
   if (!ctx.alive()) return;
-  main.replaceChildren(storageCard(ctx, view));
+  main.replaceChildren(storageCard(ctx, view), ...(typeof ctx.call === 'function' ? [methodistSettingsCard(ctx)] : []));
 }
 
 function storageCard(ctx, initial) {

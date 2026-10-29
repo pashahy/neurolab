@@ -4,6 +4,7 @@ import { loadCourse, flatLessons, courseAccess, deadlineInfo } from '../content.
 import { DISCIPLINES } from '../config.js';
 import { lessonKey } from '../store.js';
 import { pendingBanner } from './pending-banner.js';
+import { debtsCard } from './debts.js';
 import { coursePath, doneStreak, routeStop, pathInputs, progressCount } from './course-path.js';
 
 const plural = (n, [one, few, many]) => {
@@ -34,6 +35,7 @@ export async function renderHome(app) {
       h('section', { class: 'home-courses', 'aria-labelledby': 'my-courses' },
         h('h2', { class: 'sec-title', id: 'my-courses' }, 'Мои курсы'),
         pendingBanner(app), // «N работ ждут отправки»: обновляется сама и пропадает, когда всё ушло
+        debtsCard(app), // «Отработать»: долги, отмеченные преподавателем (скрыт, пока их нет)
         courses)),
     h('section', { class: 'home-paths', 'aria-labelledby': 'course-path' },
       h('h2', { class: 'sec-title', id: 'course-path' }, 'Путь курса'),

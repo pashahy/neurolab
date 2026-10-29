@@ -211,6 +211,23 @@ ol.sum-list { counter-reset: sum; }
 .hard-head { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .hard-pct { color: var(--bad); font-weight: 600; }
 
+/* анализ заданий */
+.an-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.an-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow-wrap: anywhere; }
+.an-item.is-hard { border-color: var(--bad); }
+.an-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.an-tag { font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.an-tag.hard { color: var(--bad); border-color: var(--bad); font-weight: 600; }
+.an-text { margin: 6px 0; }
+.an-meter { display: grid; gap: 4px; }
+.an-bar { height: 10px; border-radius: 6px; background: var(--border); overflow: hidden; }
+.an-fill { display: block; height: 100%; background: var(--accent, #4338ca); }
+.is-hard .an-fill { background: var(--bad); }
+.an-val { font-weight: 600; }
+.an-wrong ul { margin: 4px 0; padding-left: 20px; }
+.an-wrong li { margin: 2px 0; }
+.an-n { margin-left: 8px; color: var(--muted, inherit); font-weight: 600; }
+
 /* карточки входа */
 .cards-sheet { display: grid; gap: 16px; }
 .cards-page { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -254,3 +271,11 @@ ol.sum-list { counter-reset: sum; }
 
 .sig-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
 .sig-chip { padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; background: var(--warn-bg, #fff3cd); color: var(--warn, #7a5b00); border: 1px solid currentColor; }
+
+/* автопосещаемость */
+.att-summary { font-weight: 600; margin: 0 0 8px; }
+.att-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.att-chip { font: inherit; font-size: 0.85rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; }
+.att-chip.att-present { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.att-chip.att-late { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+.att-chip.att-absent { color: var(--bad); border-color: var(--bad); }

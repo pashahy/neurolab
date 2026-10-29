@@ -5,6 +5,7 @@ import { submissionParts } from '../grading.js';
 import { v4Submission } from '../grading-v4.js';
 import { isV4 } from '../lesson-v4-model.js';
 import { isV2, allTasks, hasVariants, practiceTasks, wordCount, readMinutes, sortedGlossary } from '../lesson-model.js';
+import { lessonDebt } from '../debts.js';
 import { loadCourse, loadLesson, isLessonOpen, courseAccess, deadlineInfo, teacherGrade } from '../content.js';
 import { lessonKey } from '../store.js';
 import { identityChanged } from '../nav.js';
@@ -22,6 +23,8 @@ import { startLivePulse, stageOf, scoreOf } from '../live-pulse.js';
 import { addPaste, pasteTotal, buildSignals } from '../signals-v4.js';
 import { reportLessonOpen } from '../lesson-open.js';
 import { mountBoardPanel } from '../live-board-client.js';
+import { orderPractice } from '../control.js';
+import { controlSetup, mountControlTimer, sealedAnswer, sealedResultCard, controlDoneBox } from './control.js';
 import { createTeamCtl, gate as teamGate, banner as teamBanner, footer as teamFooter } from './team.js';
 const safeStorage = () => { try { return globalThis.localStorage; } catch { return null; } };
 
@@ -41,15 +44,30 @@ export async function renderLesson(app, discipline, n) {
     return;
   }
   if (app.routeId !== my) return;
-  const acc = preview ? null : courseAccess(app.store.me(), discipline);
+  let acc = preview ? null : courseAccess(app.store.me(), discipline);
   if (!preview && !acc.visible) {
     app.root.replaceChildren(h('div', { class: 'card' }, h('p', {}, '🔒 Эта дисциплина недоступна для вашей группы.'), h('a', { class: 'btn', href: '#/' }, '← На главную')));
     return;
+  }
+  // отработка: пока долг по ПЗ есть, оно доступно студенту (и закрытое для группы), а срок — срок отработки (сданный долг — тоже:
+  // сервер принимает пересдачу). Сеть — только для закрытого ПЗ или прошедшего срока группы, иначе долг берётся из памяти.
+  let debt = null;
+  if (!preview) {
+    const needNet = !isLessonOpen(acc, n) || !!(deadlineInfo(acc, n) || {}).overdue;
+    debt = await lessonDebt(app.api, app.store.profile().login, discipline, n, needNet);
+    if (app.routeId !== my) return;
+    if (debt) acc = Object.assign({}, acc, { open: acc.open === 'all' ? 'all' : (acc.open || []).concat(n), deadlines: Object.assign({}, acc.deadlines, { [String(n)]: debt.due }) });
   }
   if (!preview && !isLessonOpen(acc, n)) {
     app.root.replaceChildren(h('div', { class: 'card' }, h('p', {}, '🔒 Это занятие пока закрыто преподавателем.'), h('a', { class: 'btn', href: back }, '← К карте курса')));
     return;
   }
+  // Контрольная: экран начала / «сдана» вместо занятия либо режим run (таймер, порядок заданий, скрытые ответы)
+  const ctlSet = preview ? null : await controlSetup({ app, discipline, n, key: lessonKey(discipline, n), rerun: () => renderLesson(app, discipline, n) });
+  if (app.routeId !== my) return;
+  if (ctlSet && ctlSet.screen) { app.root.replaceChildren(ctlSet.screen); return; }
+  const ctlRun = ctlSet && ctlSet.run;
+  const sealedNow = () => !!(ctlRun && ctlRun.sealed());
   if (!preview && app.store.session()) reportLessonOpen({ api: app.api, discipline, lesson: lesson.number != null ? lesson.number : n });
   const deadline = preview ? null : deadlineInfo(acc, n);
   // блок оценки преподавателя для ручного задания; оценки берём из кэша (обновляются при входе и на карте курса)
@@ -64,8 +82,8 @@ export async function renderLesson(app, discipline, n) {
   const deadlineNote = () => {
     if (!deadline) return '';
     return deadline.overdue
-      ? h('p', { class: 'hint deadline overdue' }, '⏰ Срок сдачи прошёл. Работу можно сдать — она будет с отметкой «после срока».')
-      : h('p', { class: 'hint deadline' }, `⏰ Срок сдачи: до ${deadline.label}`);
+      ? h('p', { class: 'hint deadline overdue' }, debt ? '⏰ Срок отработки прошёл. Работу можно сдать — она будет с отметкой «отработка, после срока».' : '⏰ Срок сдачи прошёл. Работу можно сдать — она будет с отметкой «после срока».')
+      : h('p', { class: 'hint deadline' }, debt ? `⏰ Отработка до ${deadline.label}` : `⏰ Срок сдачи: до ${deadline.label}`);
   };
 
   const key = preview ? `${discipline}/0` : lessonKey(discipline, n);
@@ -102,7 +120,7 @@ export async function renderLesson(app, discipline, n) {
   const withVariants = v2 && hasVariants(lesson);
   // задания практики выбранного варианта (у занятия без вариантов — вся практика)
   // у v4 порядок такой: базовые задания, затем ⭐
-  const practiceOf = v => (v4 ? practiceV4(lesson, v) : practiceTasks(lesson, v));
+  const practiceOf = v => { const l = v4 ? practiceV4(lesson, v) : practiceTasks(lesson, v); return ctlRun ? orderPractice(l, owner, key, isAdv) : l; };
   const practice = () => practiceOf(draft.variant);
   const VARIANTS = {
     phone: { icon: '📱', title: 'С телефона', desc: 'Всё прямо на сайте, с любого устройства.', short: 'с телефона' },
@@ -128,7 +146,7 @@ export async function renderLesson(app, discipline, n) {
   // контекст экранов v4 (./lesson-v4.js): они вызываются из show() и task()
   const v4ctx = () => ({
     view, lesson, course, acc, draft, save, show, header, tools, grid, mountTask, deadlineNote, preview, plural, practice, switchVariant,
-    openGlossary, submit: submitV4, openHomework, commentSlot,
+    openGlossary, submit: submitV4, openHomework, commentSlot, sealed: sealedNow,
     // ДЗ (./homework.js): свой черновик, лимит попыток — в store
     app, key, discipline, back, saveDraft, ownerChanged, evict, isActive: () => app.routeId === my && !evicted,
     // тот, кто уже сдавал это ПЗ, видит на входе кнопку «📝 Домашнее задание»
@@ -308,9 +326,12 @@ export async function renderLesson(app, discipline, n) {
       if (busy) return;
       D.locked[t.id] = true;
       S();
-      body.replaceChildren();
-      type.render(t, body, { ...extra, answer: D.answers[t.id], onChange: () => {}, locked: true });
-      showFeedback(type.check(t, D.answers[t.id]));
+      if (sealedNow()) sealedAnswer(body, feedback);
+      else {
+        body.replaceChildren();
+        type.render(t, body, { ...extra, answer: D.answers[t.id], onChange: () => {}, locked: true });
+        showFeedback(type.check(t, D.answers[t.id]));
+      }
       drawFooter();
       if (ui.onLock) ui.onLock();
     }
@@ -332,8 +353,11 @@ export async function renderLesson(app, discipline, n) {
     // ответ может прийти после сохранения/пропуска задания, сдачи работы или ухода с экрана — тогда он не пишется
     const onChange = answerWriter(D, t.id, { isActive: active, onWrite: () => { S(); drawFooter(); } });
     try {
-      type.render(t, body, { ...extra, answer: D.answers[t.id], locked, onChange: locked ? () => {} : onChange });
-      if (locked) showFeedback(type.check(t, D.answers[t.id]));
+      if (locked && sealedNow()) sealedAnswer(body, feedback);
+      else {
+        type.render(t, body, { ...extra, answer: D.answers[t.id], locked, onChange: locked ? () => {} : onChange });
+        if (locked) showFeedback(type.check(t, D.answers[t.id]));
+      }
       drawFooter();
     } catch (e) {
       // устаревший ответ (занятие изменили) — сбрасываем его; без ответа ошибку не прячем, чтобы не зациклиться
@@ -549,7 +573,7 @@ export async function renderLesson(app, discipline, n) {
     const errLine = h('p', { class: 'error', role: 'alert' });
     const submitBtn = h('button', { class: 'btn primary big', type: 'button', onclick: submitNow }, preview ? 'Завершить демо' : '📤 Сдать работу');
     add(view, header(),
-      h('div', { class: 'card result' },
+      sealedNow() ? sealedResultCard() : h('div', { class: 'card result' },
         withVariants ? h('span', { class: 'pill' }, `${VARIANTS[draft.variant].icon} Вариант: ${VARIANTS[draft.variant].short}`) : '',
         h('div', { class: 'big-score' }, `${grade.score} / ${grade.max}`),
         h('p', { class: 'muted' }, 'баллов по автопроверке'),
@@ -593,13 +617,16 @@ export async function renderLesson(app, discipline, n) {
         profile: app.store.profile(), discipline, lesson, grade, startedAt: draft.startedAt, variant: draft.variant,
         answers: subAnswers, texts: subTexts, v4: v4 ? { ...v4Submission(lesson, draft, grade), signals: buildSignals(draft, safeStorage(), discipline, n) } : undefined,
       });
-      gain = xpGain(app.store.progress(key), grade);
-      const before = levelFor(app.store.state().xp);
-      app.store.recordResult(key, { score: grade.score, max: grade.max, at: new Date().toISOString() });
-      app.store.addXp(gain);
-      badges = app.store.addBadges(newBadges(app.store.state(), { perfectTypes: grade.perfectTypes }));
-      const after = levelFor(app.store.state().xp);
-      levelUp = after.index > before.index ? after : null;
+      if (sealedNow()) { gain = 0; badges = []; levelUp = null; } // контрольная: баллы и опыт — после окончания, с сервера
+      else {
+        gain = xpGain(app.store.progress(key), grade);
+        const before = levelFor(app.store.state().xp);
+        app.store.recordResult(key, { score: grade.score, max: grade.max, at: new Date().toISOString() });
+        app.store.addXp(gain);
+        badges = app.store.addBadges(newBadges(app.store.state(), { perfectTypes: grade.perfectTypes }));
+        const after = levelFor(app.store.state().xp);
+        levelUp = after.index > before.index ? after : null;
+      }
       closed = true;
       app.store.clearDraft(key);
       app.submittedKey = key; // если сессия истечёт при отправке, вход вернёт студента на карту курса, а не в сданное занятие
@@ -612,6 +639,7 @@ export async function renderLesson(app, discipline, n) {
     const { sent, limit, hold, rejected } = await app.submitter.submit(sub);
     if (app.routeId !== my) return; // например, сессия истекла: сдача в очереди, студента ждёт экран входа
     if (sent && pulse) { submittedOk = true; pulse.kick(); } // доска: сервер принял сдачу → этап «сдал»
+    if (sealedNow() && (sent || hold === undefined && !limit && rejected === undefined)) { view.replaceChildren(controlDoneBox(back, !!sent)); window.scrollTo(0, 0); return; }
     view.replaceChildren(done({ sent, limit, hold, rejected, subId: sub.id, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max, grade }));
     window.scrollTo(0, 0);
   }
@@ -633,7 +661,7 @@ export async function renderLesson(app, discipline, n) {
         hasHomework(lesson) ? homeworkChooser(v4ctx(), openHomework) : '',
         h('a', { class: 'btn primary big', href: '#/' }, 'На главную'));
     }
-    const v4blocks = v4 && grade && !(rejected !== undefined)
+    const v4blocks = v4 && grade && !(rejected !== undefined) && !sealedNow()
       ? [markCard(grade, 'Ваша отметка'), hasHomework(lesson) ? homeworkChooser(v4ctx(), openHomework) : ''] : [];
     // rejected — сервер отказал (повреждённая сдача): никакого «сдано», только причина и просьба сообщить преподавателю
     const failed = rejected !== undefined;
@@ -653,7 +681,7 @@ export async function renderLesson(app, discipline, n) {
       deadline && deadline.overdue ? h('p', { class: 'hint' }, 'Работа сдана после срока — преподаватель увидит отметку.') : '',
       commentSlot(),
       ...v4blocks,
-      h('div', { class: 'xp-gain' }, gain ? `+${gain} XP` : 'XP начисляются за улучшение результата'),
+      sealedNow() ? '' : h('div', { class: 'xp-gain' }, gain ? `+${gain} XP` : 'XP начисляются за улучшение результата'),
       levelUp ? h('div', { class: 'card level-up' }, `⬆ Новый уровень: ${levelUp.title}!`) : '',
       badges.length ? h('div', { class: 'card' }, h('h2', {}, 'Новые значки'), h('div', { class: 'badges' }, badges.map(id => BADGES.find(b => b.id === id)).map(b =>
         h('div', { class: 'badge got' }, h('div', { class: 'badge-icon', 'aria-hidden': 'true' }, b.icon), h('div', { class: 'badge-title' }, b.title), h('div', { class: 'badge-desc' }, b.desc))))) : '',
@@ -685,5 +713,17 @@ export async function renderLesson(app, discipline, n) {
   const team = v4 && !preview && app.store.session() ? createTeamCtl({ api: app.api, d: discipline, n, storage: safeStorage(), key }) : null;
   const teamCtx = () => ({ view, header, tools, grid, draft, save, show, practice, lesson, isActive: () => app.routeId === my && !evicted });
 
+  // Контрольная: таймер; по окончании времени (или закрытии преподавателем) работа отправляется сама
+  if (ctlRun) {
+    mountControlTimer(ctlRun, {
+      active: () => app.routeId === my && !closed && !evicted,
+      onExpire: () => {
+        if (closed || evicted) return;
+        const { grade, answers, texts } = submissionParts(lesson, draft);
+        view.replaceChildren(h('p', { class: 'loading' }, 'Время вышло. Отправляем работу…'));
+        doSubmit({ submitBtn: { disabled: false, textContent: '' }, errLine: { textContent: '' }, grade, subAnswers: answers, subTexts: texts });
+      },
+    });
+  }
   show();
 }

@@ -13,7 +13,8 @@ export async function renderRating(app) {
     const r = await (typeof app.loadRating === 'function' ? app.loadRating() : app.api.rating());
     if (app.routeId !== my) return;
     if (!r.top.length) { box.replaceChildren(h('p', {}, 'В группе пока нет сданных работ — станьте первым!')); return; }
-    box.replaceChildren(
+    box.replaceChildren();
+    add(box, // add пропускает null: зала славы может не быть (replaceChildren вывел бы «null»)
       h('ol', { class: 'rating' }, r.top.map(x => h('li', { class: x.me ? 'me' : '' },
         h('span', { class: 'place' }, MEDALS[x.place - 1] || String(x.place)), h('span', { class: 'name' }, x.name), h('span', { class: 'xp' }, `${x.xp} XP`)))),
       r.me ? h('p', { class: 'my-place' }, `Ваше место: ${r.me.place} из ${r.total} · ${r.me.xp} XP`) : h('p', { class: 'hint' }, 'Сдайте первую работу, чтобы попасть в рейтинг.'),

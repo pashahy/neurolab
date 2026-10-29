@@ -6,40 +6,49 @@ import { renderCards } from './cards.js';
 import { renderJournal } from './journal.js';
 import { renderReview, renderWork } from './review.js';
 import { renderAccess } from './access.js';
+import { renderDebts } from './debts.js';
 import { renderStats } from './stats.js';
 import { renderSummary } from './summary.js';
+import { renderAnalysis } from './analysis.js';
+import { renderAttendance } from './attendance.js';
 import { renderSettings } from './settings.js';
 import { renderBoard } from './board.js';
 import { renderLive } from './live.js';
 import { renderAdminSandbox } from './sandbox.js';
+import { isMethodist, setMethodist, METHODIST_TABS, methodistLoginForm, methodistBanner, methodistCall, viewOnly } from './methodist.js';
 
 const TABS = [
   { id: 'students', label: 'Студенты', render: renderStudents },
   { id: 'journal', label: 'Журнал', render: renderJournal },
   { id: 'review', label: 'Проверка', render: renderReview },
   { id: 'access', label: 'Доступ', render: renderAccess },
+  { id: 'debts', label: 'Отработка', render: renderDebts },
   { id: 'stats', label: 'Статистика', render: renderStats },
   { id: 'summary', label: 'Сводка', render: renderSummary },
+  { id: 'analysis', label: 'Анализ', render: renderAnalysis },
+  { id: 'attendance', label: 'Посещаемость', render: renderAttendance },
   { id: 'settings', label: 'Настройки', render: renderSettings },
   { id: 'sandbox', label: '🧪 Песочница', render: renderAdminSandbox },
 ];
 const ADMIN_PASSWORD_MIN = 10;
 
-// Админ-панель: #/admin, #/admin/students|journal|review|access|stats|summary|settings, #/admin/cards, #/admin/work, #/admin/live/<d>/<n>, #/admin/board/<d>/<n> (доска без шапки).
+// Админ-панель: #/admin, #/admin/students|journal|review|access|debts|stats|summary|settings, #/admin/cards, #/admin/work, #/admin/live/<d>/<n>, #/admin/board/<d>/<n> (доска без шапки).
 // Не требует студенческой сессии; пароль администратора нигде не сохраняется, хранится только токен.
 export function renderAdmin(app, parts, query) {
   const my = app.routeId;
   const alive = () => app.routeId === my;
   const token = app.store.adminToken();
   const sub = parts[0] || '';
+  const meth = !!token && isMethodist();
   if (!token) { renderAdminLogin(app, alive); return; }
-  if (!sub) { location.replace('#/admin/students'); return; }
+  if (!sub) { location.replace(meth ? '#/admin/journal' : '#/admin/students'); return; }
 
   let groupsPromise = null;
   const ctx = {
     app, query, alive, parts,
     // запрос от имени администратора; при {auth:true} токен стирается и открывается форма входа
-    call: (action, body) => ctx.guard(() => app.api.admin(action, body || {})),
+    methodist: meth,
+    call: (action, body) => ctx.guard(() => (meth ? methodistCall(app.api.admin) : app.api.admin)(action, body || {})),
     // то же для готовых методов api (api.adminFileUrl и т. п.): job() -> Promise
     async guard(job) {
       try {
@@ -47,6 +56,7 @@ export function renderAdmin(app, parts, query) {
       } catch (e) {
         if (e && e.auth) {
           app.store.clearAdminToken();
+          setMethodist(false);
           app.adminFlash = 'Сессия администратора закончилась. Войдите снова';
           e.handled = true;
           if (alive()) app.go('/admin');
@@ -76,12 +86,14 @@ export function renderAdmin(app, parts, query) {
     work: { id: query.get('from') === 'review' ? 'review' : 'journal', render: renderWork },
     live: { id: 'summary', render: renderLive },
   };
+  if (meth && METHODIST_TABS.indexOf(sub) < 0) { location.replace('#/admin/journal'); return; } // методисту доска и правка недоступны
   if (sub === 'board') return renderBoard(ctx); // полноэкранная доска: без шапки и вкладок админки
   const page = TABS.find(t => t.id === sub) || (Object.prototype.hasOwnProperty.call(extra, sub) ? extra[sub] : null);
   if (!page) { location.replace('#/admin/students'); return; }
 
   const main = h('div', { class: 'admin-main' }, loading());
   app.root.append(adminHead(app, ctx, page.id), main);
+  if (meth) viewOnly(main);
   ctx.main = main;
   return Promise.resolve(page.render(ctx, main)).catch(e => {
     if (!alive() || (e && e.handled)) return;
@@ -92,6 +104,7 @@ export function renderAdmin(app, parts, query) {
 }
 
 function adminHead(app, ctx, active) {
+  const meth = ctx.methodist;
   const pwBox = h('div');
   const toggle = h('button', {
     class: 'btn small', type: 'button', 'aria-expanded': 'false',
@@ -107,15 +120,17 @@ function adminHead(app, ctx, active) {
     onclick: () => {
       app.api.admin('logout').catch(() => {}); // токен подставляется сразу; без сети выходим локально
       app.store.clearAdminToken();
+      setMethodist(false);
       app.adminFlash = '';
       app.go('/admin');
     },
   }, 'Выйти');
   return h('header', { class: 'admin-head no-print' },
-    h('div', { class: 'admin-bar' }, h('h1', {}, 'Панель преподавателя'), h('div', { class: 'admin-actions' }, toggle, logout)),
+    h('div', { class: 'admin-bar' }, h('h1', {}, meth ? 'Панель методиста' : 'Панель преподавателя'), h('div', { class: 'admin-actions' }, meth ? '' : toggle, logout)),
+    meth ? methodistBanner() : '',
     pwBox,
     h('nav', { class: 'admin-tabs', 'aria-label': 'Разделы панели' },
-      TABS.map(t => h('a', { class: `admin-tab${t.id === active ? ' active' : ''}`, href: `#/admin/${t.id}`, 'aria-current': t.id === active ? 'page' : null }, t.label))));
+      TABS.filter(t => !meth || METHODIST_TABS.indexOf(t.id) >= 0).map(t => h('a', { class: `admin-tab${t.id === active ? ' active' : ''}`, href: `#/admin/${t.id}`, 'aria-current': t.id === active ? 'page' : null }, t.label))));
 }
 
 function changePasswordForm(ctx, close) {
@@ -168,6 +183,7 @@ function renderAdminLogin(app, alive) {
   }
   const enter = r => {
     if (!alive()) return;
+    setMethodist(!!r.methodist);
     app.store.setAdminToken(r.token);
     app.adminFlash = '';
     app.rerender();
@@ -190,7 +206,12 @@ function renderAdminLogin(app, alive) {
         });
       },
     }, pw.field, err, btn,
-    h('button', { class: 'link-btn', type: 'button', onclick: showSetup }, 'Первый вход')));
+    h('button', { class: 'link-btn', type: 'button', onclick: showSetup }, 'Первый вход'),
+    h('button', { class: 'link-btn', type: 'button', onclick: showMethodist }, 'Вход методиста')));
+  }
+
+  function showMethodist() {
+    box.replaceChildren(methodistLoginForm(app, { enter, run, back: showLogin }));
   }
 
   function showSetup() {

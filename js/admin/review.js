@@ -192,6 +192,7 @@ export async function renderWork(ctx, main) {
     summary.replaceChildren(
       h('div', {}, `Попытка ${cur + 1} из ${attempts.length} · ${fmtTime(a.time)}${a.durationMin ? ` · ${a.durationMin} мин` : ''}`,
         a.late ? h('span', { class: 'late-badge' }, '⏰ после срока') : '',
+        a.debt ? h('span', { class: 'late-badge' }, '🔁 отработка') : '',
         variant ? h('span', { class: 'variant-badge' }, variant === 'pc' ? ' · 💻 ПК-вариант' : ' · 📱 телефон') : ''),
       h('div', {}, `Автобаллы: ${a.score} из ${a.max}`),
       totalLine);
