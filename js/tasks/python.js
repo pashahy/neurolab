@@ -12,6 +12,7 @@ export default {
     if (typeof t.solution !== 'string' || !t.solution.trim()) e.push('python: нужен solution — эталонный код');
     if (!Array.isArray(t.tests) || !t.tests.length) e.push('python: нужны tests');
     else t.tests.forEach((x, i) => { if (!x.name || !x.code) e.push(`python: тест ${i}: нужны name и code`); });
+    if (t.packages !== undefined && !(Array.isArray(t.packages) && t.packages.every(x => typeof x === 'string' && x))) e.push('python: packages — массив имён пакетов (например, ["numpy"])');
     return e;
   },
   ready: (t, a) => Array.isArray(a?.passed) && a.passed.length === t.tests.length,
@@ -36,13 +37,16 @@ export default {
     };
     const showTests = res => results.replaceChildren(...t.tests.map((x, i) => h('li', { class: res[i]?.ok ? 'right' : 'wrong' },
       res[i]?.ok ? '✅ ' : '❌ ', x.name, !res[i]?.ok && res[i]?.error ? h('pre', { class: 'py-err' }, res[i].error) : '')));
-    btnRun.onclick = () => busy('Выполняется… Первый запуск загружает Python (до 30 секунд).', async () => {
-      const { results: [r] } = await runPython(code, [{ stdin: t.stdin || [] }]);
+    const pkgs = Array.isArray(t.packages) && t.packages.length ? t.packages : null;
+    const runOpts = pkgs ? { packages: pkgs } : undefined;
+    const pkgNote = pkgs ? ` и ${pkgs.join(', ')}` : '';
+    btnRun.onclick = () => busy(`Выполняется… Первый запуск загружает Python${pkgNote} (до минуты).`, async () => {
+      const { results: [r] } = await runPython(code, [{ stdin: t.stdin || [] }], runOpts);
       out.show([r]);
     });
     btnTest.onclick = () => busy('Проверяем…', async () => {
       const src = code;
-      const { results: res } = await runPython(code, t.tests.map(x => ({ stdin: x.stdin || t.stdin || [], test: x.code })));
+      const { results: res } = await runPython(code, t.tests.map(x => ({ stdin: x.stdin || t.stdin || [], test: x.code })), runOpts);
       if (code !== src) {
         return 'Код изменился во время проверки — нажмите «Проверить» ещё раз';
       }
