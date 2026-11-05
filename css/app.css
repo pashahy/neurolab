@@ -766,3 +766,21 @@ p.warm-repeat { font-weight: 400; }
 .ctl-admin { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-strong); }
 .ctl-row { display: grid; gap: 8px; margin: 10px 0; padding: 10px; border: 1px solid var(--border-strong); border-radius: 12px; }
 .ctl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* === Шпаргалка (#/memo) === */
+.cheat-head { margin-bottom: 14px; }
+.cheat-nav { position: sticky; top: 0; z-index: 5; background: var(--bg, #fff); padding: 8px 0; border-bottom: 1px solid var(--border-strong); margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.cheat-nav-part { font-weight: 700; margin-right: 4px; }
+.cheat-nav-title { margin-right: 10px; }
+.cheat-nav-link { font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
+.cheat-body { display: grid; gap: 18px; }
+.cheat-part > h2 { margin: 4px 0 10px; }
+.cheat-sec { scroll-margin-top: 90px; }
+.cheat-pre { position: relative; }
+.cheat-copy { position: absolute; top: 6px; right: 6px; font-size: 0.75rem; padding: 2px 8px; opacity: 0.75; }
+@media (hover: hover) { .cheat-copy:hover { opacity: 1; } }
+.cheat-flash { outline: 2px solid var(--accent, #4a7); outline-offset: 2px; transition: outline-color 1.6s; }
+@media (max-width: 560px) {
+  .cheat-nav { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .cheat-copy { position: static; display: block; margin-top: 4px; }
+}

@@ -94,6 +94,7 @@ export async function renderHome(app) {
         return h('div', { class: `badge ${got ? 'got' : ''}` }, h('div', { class: 'badge-icon', 'aria-hidden': 'true' }, got ? b.icon : '🔒'), h('div', { class: 'badge-title' }, b.title), h('div', { class: 'badge-desc' }, b.desc));
       }))),
     h('nav', { class: 'home-links', 'aria-label': 'Ещё' },
+      h('a', { class: 'btn', href: '#/memo' }, '📖 Шпаргалка'),
       h('a', { class: 'btn', href: '#/rating' }, '🏆 Рейтинг группы'),
       h('a', { class: 'btn', href: '#/sandbox' }, '🧪 Песочница'),
       h('a', { class: 'btn ghost', href: '#/profile' }, `👤 ${p.name}, ${p.group}`)));

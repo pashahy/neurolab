@@ -279,3 +279,20 @@ ol.sum-list { counter-reset: sum; }
 .att-chip.att-present { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
 .att-chip.att-late { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
 .att-chip.att-absent { color: var(--bad); border-color: var(--bad); }
+
+/* === Конструктор занятий === */
+.pz-con { display: grid; gap: 12px; }
+.pz-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-strong); }
+.pz-block > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.pz-block { border: 1px solid var(--border-strong); border-radius: 12px; padding: 6px 12px 12px; }
+.pz-task { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+.pz-task-sum { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pz-task-ops { display: flex; gap: 4px; margin-left: auto; }
+.pz-task-form { margin-top: 8px; display: grid; gap: 8px; }
+.pz-list { display: grid; gap: 6px; margin: 6px 0; }
+.pz-list-row { display: flex; gap: 6px; align-items: center; }
+.pz-list-row input { flex: 1; }
+.pz-list-obj { border: 1px dashed var(--border); border-radius: 8px; padding: 8px; display: grid; gap: 6px; }
+.pz-list-label { font-weight: 600; font-size: 0.85rem; }
+.pz-report { border-radius: 10px; padding: 10px; margin-top: 8px; }
+.pz-report ul { margin: 6px 0 0 18px; }

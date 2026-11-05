@@ -15,6 +15,7 @@ import { renderSettings } from './settings.js';
 import { renderBoard } from './board.js';
 import { renderLive } from './live.js';
 import { renderAdminSandbox } from './sandbox.js';
+import { renderConstructor } from './constructor.js';
 import { isMethodist, setMethodist, METHODIST_TABS, methodistLoginForm, methodistBanner, methodistCall, viewOnly } from './methodist.js';
 
 const TABS = [
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'attendance', label: 'Посещаемость', render: renderAttendance },
   { id: 'settings', label: 'Настройки', render: renderSettings },
   { id: 'sandbox', label: '🧪 Песочница', render: renderAdminSandbox },
+  { id: 'constructor', label: '🛠 Конструктор', render: renderConstructor },
 ];
 const ADMIN_PASSWORD_MIN = 10;
 

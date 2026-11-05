@@ -2,7 +2,7 @@
 // BUILD подставляет tools/publish.sh (хэш коммита); в разработке остаётся 'dev'.
 // Правило: обновления сайта не ломаем — HTML/JS/CSS/контент идут «сеть сначала» (таймаут 4 с, потом кэш),
 // «сначала кэш» — только fonts и icons; vendor не кэшируем. Чужие origin и не-GET не трогаем.
-const BUILD = '4507af8';
+const BUILD = '27cf835';
 const CACHE = 'neurolab-' + BUILD;
 const NET_TIMEOUT = 4000;
 const SHELL = [
