@@ -21,6 +21,13 @@ export async function renderHome(app) {
   const first = p.name.split(' ')[1] || p.name;
   const streak = h('div', { class: 'hero-streak' });
   const courses = h('div', { class: 'courses' });
+  // Шпаргалка — равнозначная карточка рядом с дисциплинами
+  courses.append(h('a', { class: 'card course-card memo-card', href: '#/memo' },
+    h('div', { class: 'cover memo-cover', 'aria-hidden': 'true' }, h('span', {}, '📖')),
+    h('div', { class: 'course-info' },
+      h('div', { class: 'course-title' }, 'Шпаргалка: Python и Git'),
+      h('div', { class: 'course-code' }, 'Конспект самого необходимого — простым языком')),
+    h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')));
   const paths = h('div', { class: 'paths' });
   add(app.root,
     h('div', { class: 'home-top' },
@@ -94,7 +101,6 @@ export async function renderHome(app) {
         return h('div', { class: `badge ${got ? 'got' : ''}` }, h('div', { class: 'badge-icon', 'aria-hidden': 'true' }, got ? b.icon : '🔒'), h('div', { class: 'badge-title' }, b.title), h('div', { class: 'badge-desc' }, b.desc));
       }))),
     h('nav', { class: 'home-links', 'aria-label': 'Ещё' },
-      h('a', { class: 'btn', href: '#/memo' }, '📖 Шпаргалка'),
       h('a', { class: 'btn', href: '#/rating' }, '🏆 Рейтинг группы'),
       h('a', { class: 'btn', href: '#/sandbox' }, '🧪 Песочница'),
       h('a', { class: 'btn ghost', href: '#/profile' }, `👤 ${p.name}, ${p.group}`)));

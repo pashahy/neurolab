@@ -783,3 +783,7 @@ p.warm-repeat { font-weight: 400; }
 @media (max-width: 560px) {
   .cheat-copy { position: static; display: block; margin-top: 4px; }
 }
+
+/* Шпаргалка — карточка на главной */
+.memo-cover { background: radial-gradient(circle at 26% 22%, #ffd166, transparent 55%), radial-gradient(circle at 80% 78%, #4f46e5, transparent 62%), #2b1d4a; display: grid; place-items: center; }
+.memo-cover span { position: static; font-size: 1.7rem; text-shadow: none; }
