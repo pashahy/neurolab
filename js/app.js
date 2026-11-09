@@ -21,6 +21,7 @@ import { renderPortfolio } from './ui/portfolio.js';
 import { renderSandbox } from './ui/sandbox.js';
 import { renderCheatsheet } from './ui/cheatsheet.js';
 import { renderAdmin } from './admin/app.js';
+import { startGuard } from './guard.js';
 
 const store = createStore();
 const LOGIN_WAIT_MS = 10000; // сколько вход ждёт me, прежде чем открыть экран (обновление продолжится в фоне)
@@ -246,3 +247,4 @@ document.addEventListener('visibilitychange', () => {
 route();
 flushUI();
 registerPWA();
+startGuard(app);

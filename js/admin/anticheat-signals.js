@@ -11,6 +11,7 @@ export const SIGNAL_LABELS = {
   nokeys: 'нет ключей — баллы клиента',
   client: 'Python/терминал — баллы клиента',
   noanswers: 'ДЗ без ответов',
+  tpl: 'шаблонные тексты автосдачи',
 };
 export const SIGNALS_HINT = 'Повод присмотреться, не доказательство';
 
