@@ -460,10 +460,10 @@ export async function renderLesson(app, discipline, n) {
       progress.setAttribute('aria-valuenow', String(pct));
       const open = openChecks();
       const ready = open.length > 0 && handles.every((hd, i) => !hd || draft.locked[checks[i].id] || hd.ready());
-      checkAllBox.replaceChildren(open.length
+      checkAllBox.replaceChildren(...(open.length
         ? [h('button', { class: 'btn primary big', type: 'button', disabled: !ready, onclick: checkAll }, 'Проверить ответы'),
           ready ? '' : h('p', { class: 'hint' }, 'Ответьте на все вопросы или пропустите их, затем нажмите «Проверить ответы».')]
-        : '');
+        : []));
       nav.replaceChildren(
         k > 0 ? h('button', { class: 'btn ghost big', type: 'button', onclick: () => go(k - 1) }, `← Назад к разделу ${k}`) : '',
         h('button', { class: 'btn primary big', type: 'button', disabled: !allDone(), onclick: () => (k === N - 1 ? toPractice() : go(k + 1)) }, k === N - 1 ? 'К практике →' : 'Дальше →'),

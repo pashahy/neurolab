@@ -291,12 +291,12 @@ export function safetyV4(ctx) {
     const open = checks.filter(t => !draft.locked[t.id]);
     const ready = open.length > 0 && handles.every((hd, i) => !hd || draft.locked[checks[i].id] || hd.ready());
     const waiting = checks.some(t => draft.locked[t.id] && !known(t));
-    nav.replaceChildren(ok
-      ? h('button', { class: 'btn primary big', type: 'button', onclick: toPractice }, 'К практике →')
+    nav.replaceChildren(...(ok
+      ? [h('button', { class: 'btn primary big', type: 'button', onclick: toPractice }, 'К практике →')]
       : [open.length ? h('button', { class: 'btn primary big', type: 'button', disabled: !ready, onclick: checkAll }, 'Проверить ответы') : '',
         h('p', { class: 'hint', role: 'status' }, waiting
           ? 'Проверяю ответы… Практика откроется, когда все ответы будут верными.'
-          : 'Практика откроется, когда все ответы будут верными. После ошибки прочитайте пояснение и ответьте ещё раз.')]);
+          : 'Практика откроется, когда все ответы будут верными. После ошибки прочитайте пояснение и ответьте ещё раз.')]));
   };
 
   const mountCard = (t, i, card) => {
