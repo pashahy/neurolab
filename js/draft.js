@@ -3,11 +3,14 @@ import { V4_STAGES, MISTAKE_REASONS, extraTasks, safetyChecks, isAdv } from './l
 import { isV4 } from './lesson-v4-model.js';
 import { reflectionFilled, NEXT_MAX } from './grading-v4.js';
 import { cleanPaste } from './signals-v4.js';
+import { isSealedLesson } from './sealed-content.js';
+import { migrateLegacyDraft } from './sealed-state.js';
 
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 // djb2-отпечаток задания: если содержание изменилось, старый ответ к нему не подходит
-export const sigOf = t => { const s = JSON.stringify(t); let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
+// у запечатанного задания подпись исходного задания записана при сборке (sg): черновики до выпуска сохраняются
+export const sigOf = t => { if (t && typeof t.sg === 'string') return t.sg; const s = JSON.stringify(t); let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
 
 // индекс первого раздела лекции с незакрытым контрольным вопросом (-1, если всё закрыто)
 const firstOpenSection = (lecture, locked) => lecture.findIndex(s => s && Array.isArray(s.check) && s.check.some(t => !locked[t.id]));
@@ -36,7 +39,8 @@ export function repairDraft(d, lesson, now = Date.now()) {
   // v4: разминка, инструктаж и ДЗ — вне allTasks, но их ответы тоже хранятся в черновике
   const sigs = Object.fromEntries((v4 ? [...allTasks(lesson), ...extraTasks(lesson)] : allTasks(lesson)).map(t => [t.id, sigOf(t)]));
   const goalTasks = v4 && Array.isArray(lesson.goal?.tasks) ? lesson.goal.tasks : [];
-  const base = { stage: 'intro', ...(v2 ? { section: 0 } : {}), index: 0, answers: {}, locked: {}, sigs, startedAt: now,
+  const sealed = isSealedLesson(lesson);
+  const base = { stage: 'intro', ...(v2 ? { section: 0 } : {}), index: 0, answers: {}, locked: {}, sigs, startedAt: now, ...(sealed ? { sp: 1, rv: {}, pend: {}, cn: {} } : {}),
     ...(v4 ? { goal: { chosen: [], done: false }, safetyOk: false, safetyAttempts: 0, safetySeen: [], reflection: { tasks: goalTasks.map(() => null), reason: null, next: '' } } : {}) };
   if (!isObj(d) || !isObj(d.sigs)) return base;
   const keep = id => Object.prototype.hasOwnProperty.call(sigs, id) && d.sigs[id] === sigs[id];
@@ -49,6 +53,12 @@ export function repairDraft(d, lesson, now = Date.now()) {
     index: Number.isInteger(d.index) && d.index >= 0 && d.index < tasks.length ? d.index : 0,
     answers: pick(d.answers), locked: pick(d.locked),
     startedAt: Number.isFinite(d.startedAt) ? d.startedAt : now };
+  if (sealed) {
+    // запечатанное занятие: ответы сервера (rv), ожидающие проверки (pend) и канонические ответы (cn) переживают перезагрузку; черновик до выпуска (без sp) переводится
+    out.rv = pick(d.rv); out.pend = pick(d.pend); out.cn = pick(d.cn);
+    delete out.sp;
+    if (d.sp === 1) out.sp = 1; else migrateLegacyDraft(lesson, out);
+  }
   if (v4) return repairV4(out, d, lesson, { variant, withVariants, tasks, goalTasks });
   if (v2) {
     const open = firstOpenSection(lecture, out.locked);

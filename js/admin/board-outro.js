@@ -1,7 +1,7 @@
 // B6: «Итог пары» на доске (частые ошибки, умею/частично/пока нет, облако фраз «в следующий раз я…», комментарий группе)
 // и поле «Комментарий группе» на «Моём экране». Данные — ответ boardOutro (сводка занятия, кэш сервера 60 с). Имён нет нигде.
 import { h } from '../util/dom.js';
-import { loadLesson } from '../content.js';
+import { loadSealedLesson as loadLesson } from '../sealed-content.js';
 import { cloudWords } from './board-live.js';
 import { taskLabel, COMMENT_LIMIT } from './summary.js';
 

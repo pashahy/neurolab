@@ -17,6 +17,8 @@ export default {
   },
   ready: (t, a) => Array.isArray(a?.passed) && a.passed.length === t.tests.length,
   check(t, a) { return fraction(t, Array.isArray(a?.passed) ? a.passed.filter(Boolean).length : 0, t.tests.length); },
+  // Available only in private source content; published lessons contain no solution.
+  solution: t => ({ code: t.solution, passed: t.tests.map(() => true) }),
   toText: (t, a) => a?.code ?? '',
   render(t, el, { answer, onChange, locked, store, onPaste }) {
     let code = answer?.code ?? t.starter;

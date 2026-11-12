@@ -1,6 +1,6 @@
 // B5: полоса этапов занятия с таймером и кнопками (доска и «Мой экран»). Состояние хранит сервер (boardPhase).
 import { h } from '../util/dom.js';
-import { loadLesson } from '../content.js';
+import { loadSealedLesson as loadLesson } from '../sealed-content.js';
 import { confirmDialog } from './common.js';
 import { errText } from '../ui/login.js';
 import { PHASES, PHASE_LABEL, lessonPhaseMinutes, stepPhase, normPhase, phaseOffset, phaseRemainingMs, timerText } from '../phase-model.js';

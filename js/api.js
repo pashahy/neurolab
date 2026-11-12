@@ -58,6 +58,10 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
     admin,
     // панель преподавателя v4: сводка занятия и комментарий группе (поля discipline и lesson, не d и n)
     adminLessonSummary: ({ group, discipline, lesson }) => admin('adminLessonSummary', { group, discipline, lesson }),
+    // защита оценок, этап 2: проверка заданий запечатанного занятия сервером (kind: 'lesson' | 'hw'; items: [{ id, a?, c?:1 }], не больше 40)
+    // и раскрытие всех заданий занятия для админ-проверки (ключи и пояснения, которых нет в опубликованном файле)
+    checkTasks: ({ discipline, lesson, kind, items }) => call('checkTasks', { code: discipline, lesson, kind, items }),
+    adminLessonReveal: ({ discipline, lesson }) => admin('adminLessonReveal', { code: discipline, lesson }),
     adminGroupComment: ({ group, discipline, lesson, text }) => admin('adminGroupComment', { group, discipline, lesson, text }),
     // комментарии группы текущего студента: из кэша (синхронно) или свежие, если кэш старше maxAgeMs
     groupComments: () => (commentsCache.token !== null && commentsCache.token === getToken() ? commentsCache.comments : {}),

@@ -5,6 +5,8 @@ import { round1 } from './util/text.js';
 import { gradeLesson } from './grading.js';
 import { homeworkTasks, warmupTasks } from './lesson-v4.js';
 import { homeworkMark } from './hw-mark.js';
+import { checkTask, needsKey } from './sealed-state.js';
+import { allTasks } from './lesson-model.js';
 
 const sum = (arr, f) => round1(arr.reduce((s, i) => s + f(i), 0));
 
@@ -13,7 +15,7 @@ export function gradeHomework(lesson, level, answers = {}) {
   if (level !== 'base' && level !== 'adv') throw new Error(`Неверный level ДЗ: ${String(level)}`);
   const items = homeworkTasks(lesson, level).map(t => {
     const type = TASK_TYPES[t.type];
-    const r = type.check(t, answers[t.id]);
+    const r = checkTask(t, answers[t.id]);
     return { id: t.id, type: t.type, score: r.score, max: r.max, manual: !!type.manual };
   });
   const auto = items.filter(i => !i.manual);
@@ -29,7 +31,7 @@ export function v4Submission(lesson, draft, grade) {
   for (const t of warmupTasks(lesson)) {
     const type = TASK_TYPES[t.type];
     if (type.manual) { warmup[t.id] = { score: 0, max: 0 }; continue; }
-    const r = type.check(t, answers[t.id] == null ? undefined : answers[t.id]);
+    const r = checkTask(t, answers[t.id] == null ? undefined : answers[t.id]);
     warmup[t.id] = { score: answers[t.id] == null ? 0 : round1(r.score), max: round1(r.max) };
   }
   const hasMistakes = mistakeItems(lesson, answers, draft.variant).length > 0;
@@ -50,7 +52,9 @@ export function v4Submission(lesson, draft, grade) {
 // ⭐ без ответа (не начато или пропущено) ошибкой не считается: ⭐ можно пропустить (спецификация § 4.3).
 // Базовые и лекционные задания без ответа — ошибка.
 export function mistakeItems(lesson, answers = {}, variant) {
-  return gradeLesson(lesson, answers, variant).items.filter(i => !i.manual && i.score < i.max && !(i.adv && (answers[i.id] === undefined || answers[i.id] === null)));
+  // не раскрытые (ждут проверки сервером) ошибкой не считаются: балл у них пока 0, а верно ли — неизвестно
+  const waiting = new Set(allTasks(lesson, variant).filter(needsKey).map(t => t.id));
+  return gradeLesson(lesson, answers, variant).items.filter(i => !i.manual && i.score < i.max && !waiting.has(i.id) && !(i.adv && (answers[i.id] === undefined || answers[i.id] === null)));
 }
 
 // «В следующий раз я…»: длина после обрезки пробелов; минимум обязателен, если есть ошибки

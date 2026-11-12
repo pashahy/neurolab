@@ -23,11 +23,16 @@ export default {
     const ans = Array.isArray(answer) ? [...answer] : t.cards.map(() => null);
     const box = h('div', { class: 'swipe' });
     el.append(box);
-    const summary = () => box.replaceChildren(h('ul', { class: 'swipe-summary' }, t.cards.map((c, k) =>
-      h('li', { class: ans[k] === c.answer ? 'right' : 'wrong' },
+    // до раскрытия (запечатанное задание) ключей нет: итог показывает только выбор студента
+    const keyed = c => typeof c.answer === 'boolean';
+    const summary = () => box.replaceChildren(h('ul', { class: 'swipe-summary' }, t.cards.map((c, k) => (keyed(c)
+      ? h('li', { class: ans[k] === c.answer ? 'right' : 'wrong' },
         h('span', { class: 'mark' }, ans[k] === c.answer ? '✓' : '✗'),
         h('span', { html: mdInline(c.text) }),
-        h('small', {}, ` — ${labels[c.answer]}`)))));
+        h('small', {}, ` — ${labels[c.answer]}`))
+      : h('li', {},
+        h('span', { html: mdInline(c.text) }),
+        h('small', {}, ` — ${ans[k] === null || ans[k] === undefined ? 'пропущено' : labels[ans[k]]}`))))));
     const draw = () => {
       const i = ans.findIndex(x => x === null);
       if (i === -1 || locked) { summary(); return; }
@@ -38,6 +43,7 @@ export default {
         ans[i] = val;
         onChange([...ans]);
         const c = t.cards[i];
+        if (!keyed(c)) { draw(); return; } // мгновенная обратная связь по карточке — только когда ключ есть
         const ok = val === c.answer;
         box.replaceChildren(h('div', { class: `swipe-feedback ${ok ? 'right' : 'wrong'}` },
           h('strong', {}, ok ? '✓ Верно!' : `✗ Нет — это «${labels[c.answer]}»`),

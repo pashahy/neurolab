@@ -17,7 +17,8 @@ export function homeworkAnswers(lesson, level, answers) {
 
 // Сдача ДЗ (формат v4): отдельная запись очереди kind: 'hw'; level — 'base' | 'adv'. grade — { score, max, items } по заданиям ДЗ.
 // Уходит той же очередью, что и сдача занятия (createSubmitter: повторы, busy, hold, статус), действием homeworkSubmit.
-export function buildHomeworkSubmission({ profile, discipline, lesson, level, grade, startedAt, answers, now = Date.now(), rnd = Math.random }) {
+// sp / cn — как у сдачи занятия: ДЗ запечатано, cn — id ответов, уже переведённых в каноническое пространство
+export function buildHomeworkSubmission({ profile, discipline, lesson, level, grade, startedAt, answers, sp, cn, now = Date.now(), rnd = Math.random }) {
   if (level !== 'base' && level !== 'adv') throw new Error(`Неверный level ДЗ: ${String(level)}`);
   const sub = {
     id: `${now.toString(36)}-${Math.floor(rnd() * 1e9).toString(36)}`,
@@ -35,5 +36,10 @@ export function buildHomeworkSubmission({ profile, discipline, lesson, level, gr
     group: profile.group,
   };
   if (answers !== undefined) sub.answers = homeworkAnswers(lesson, level, answers); // без параметра поля нет (старые вызовы)
+  if (sp) {
+    sub.sp = 1;
+    const mine = Array.isArray(cn) ? cn.filter(id => sub.answers && Object.prototype.hasOwnProperty.call(sub.answers, id)) : [];
+    if (mine.length) sub.cn = mine;
+  }
   return sub;
 }

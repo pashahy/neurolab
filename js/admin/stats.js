@@ -1,6 +1,6 @@
 import { h } from '../util/dom.js';
 import { md } from '../util/text.js';
-import { loadLesson } from '../content.js';
+import { loadSealedLesson as loadLesson } from '../sealed-content.js';
 import { allTasks, hasVariants } from '../lesson-model.js';
 import { errText } from '../ui/login.js';
 import { DISC, loading, loadError, emptyBox } from './common.js';

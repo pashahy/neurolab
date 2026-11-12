@@ -1,4 +1,5 @@
 """Запуск кода студента и тестов. Общий для браузера (Pyodide) и валидатора (CPython)."""
+import hashlib
 import io
 import json
 import sys
@@ -23,6 +24,34 @@ class CappedStringIO(io.StringIO):
             self.capped = True
             return len(s)
         return super().write(s)
+
+
+def _nlc(v):
+    """Каноническое значение для __nlh__: bool -> int, целое float -> int, кортеж -> {"t": [...]} (см. tools/seal-py.js)."""
+    if v is None or isinstance(v, str):
+        return v
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        try:
+            if v == int(v):
+                return int(v)
+        except (ValueError, OverflowError):
+            pass
+        return {'f': repr(v)}
+    if isinstance(v, list):
+        return [_nlc(x) for x in v]
+    if isinstance(v, tuple):
+        return {'t': [_nlc(x) for x in v]}
+    return {'o': type(v).__name__}
+
+
+def __nlh__(v):
+    """Хэш ожидаемого значения: первые 16 hex sha256 от JSON-записи (эталон в тесте не хранится открыто)."""
+    s = json.dumps(_nlc(v), ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(s.encode('utf-8', 'surrogatepass')).hexdigest()[:16]
 
 
 def format_error(e, is_test_error=False):
@@ -59,12 +88,15 @@ def run_one(code, stdin_lines, test):
         exec(compile(code, '<код>', 'exec'), ns)
         if test:
             ns['__out__'] = out.getvalue()
+            ns['__nlh__'] = __nlh__
             try:
                 exec(compile(test, '<тест>', 'exec'), ns)
             except SyntaxError as e:
                 ok, err = False, format_error(e, is_test_error=True)
             except BaseException as e:
                 ok, err = False, format_error(e, is_test_error=True)
+                if isinstance(e, AssertionError) and not str(e) and '__nlh__' in test:
+                    err += ': вывод не совпал с ожидаемым'
     except SyntaxError as e:
         ok, err = False, format_error(e, is_test_error=False)
     except BaseException as e:  # ловим и SystemExit: студент может вызвать exit()

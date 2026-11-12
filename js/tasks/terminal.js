@@ -30,7 +30,7 @@ export default {
   },
   ready: (t, a) => Array.isArray(a?.history) && a.history.length > 0,
   check(t, a) { return fraction(t, replay(t, Array.isArray(a?.history) ? a.history : []).done.filter(Boolean).length, t.goals.length); },
-  solution: t => ({ history: [...t.solution] }),
+  solution: t => (Array.isArray(t.solution) ? { history: [...t.solution] } : null), // в опубликованном занятии solution нет (приходит с сервера)
   toText: (t, a) => (a?.history || []).join('\n'),
   render(t, el, { answer, onChange, locked, store }) {
     const shell = createShell(t.setup);

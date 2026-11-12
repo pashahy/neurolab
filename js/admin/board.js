@@ -1,5 +1,6 @@
 import { h } from '../util/dom.js';
-import { loadCourse, flatLessons, loadLesson } from '../content.js';
+import { loadCourse, flatLessons } from '../content.js';
+import { loadSealedLesson as loadLesson } from '../sealed-content.js';
 import { md } from '../util/text.js';
 import { avatarUrl, defaultAvatar } from '../avatars.js';
 import { frameClass } from '../sandbox/cosmetics.js';
@@ -270,7 +271,8 @@ export async function renderBoard(ctx) {
         t.badge.textContent = state === 'idle' ? '💤' : state === 'done' ? '✓' : '';
       }
       t.stage.textContent = stageLabel(s.stage);
-      t.score.textContent = state === 'none' ? '' : `${s.score == null ? 0 : s.score}/${s.max == null ? 0 : s.max}`;
+      t.score.textContent = state === 'none' ? '' : `${s.scoreVerified === false ? '≈ ' : ''}${s.score == null ? 0 : s.score}/${s.max == null ? 0 : s.max}`;
+      t.score.title = s.scoreVerified === false ? 'Предварительные баллы с устройства студента. Окончательные — после приёма сервером.' : 'Баллы принятой сервером работы';
       t.timer.textContent = state === 'away' ? `нет на месте ${fmtClock(awayElapsed(s.awaySince, offset, clientNow))}` : '';
     });
   }

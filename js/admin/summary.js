@@ -1,5 +1,6 @@
 import { h } from '../util/dom.js';
-import { loadCourse, loadLesson, flatLessons } from '../content.js';
+import { loadCourse, flatLessons } from '../content.js';
+import { loadSealedLesson as loadLesson } from '../sealed-content.js';
 import { allTasks } from '../lesson-model.js';
 import { warmupTasks, safetyChecks, homeworkTasks, MISTAKE_REASONS } from '../lesson-v4.js';
 import { errText } from '../ui/login.js';

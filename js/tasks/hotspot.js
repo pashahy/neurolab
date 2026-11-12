@@ -20,7 +20,7 @@ export default {
     el.append(box);
     const draw = () => box.replaceChildren(...t.lines.map((line, i) => {
       const chosen = sel.has(i);
-      const target = t.correct.includes(i);
+      const target = Array.isArray(t.correct) && t.correct.includes(i); // до раскрытия ключа нет (запечатанное задание)
       const state = !locked ? (chosen ? 'chosen' : '') : target ? (chosen ? 'right' : 'missed') : chosen ? 'wrong' : '';
       return h('div', { class: 'hs-row' },
         h('button', {

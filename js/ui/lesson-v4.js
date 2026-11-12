@@ -13,6 +13,7 @@ import { hasVariants, allTasks, sortedGlossary } from '../lesson-model.js';
 import { sealedNext, sealedResultCard } from './control.js';
 import { stageMinutes, warmupTasks, baseTasks, advTasks, isAdv, safetyRules, safetyChecks, practiceV4, MISTAKE_REASONS } from '../lesson-v4.js';
 import { CHARACTERS } from '../../content/story.js';
+import { checkTask, needsKey, pendingCount } from '../sealed-state.js';
 
 const DEFAULT_QUESTION = 'Что нужно уметь, чтобы решить эту задачу?';
 
@@ -273,16 +274,29 @@ export function safetyV4(ctx) {
   if (!Array.isArray(draft.safetySeen)) draft.safetySeen = [];
   if (!draft.safetySeen.includes(seenKey)) { draft.safetySeen.push(seenKey); save(); }
 
-  const correct = t => { const r = TASK_TYPES[t.type].check(t, draft.answers[t.id]); return r.score >= r.max; };
-  const closed = t => !!draft.locked[t.id] && correct(t);
+  // запечатанный вопрос, который сервер ещё не раскрыл, верным не считается (но и не ошибка): ждём ответа
+  const known = t => !needsKey(t);
+  const correct = t => { const r = checkTask(t, draft.answers[t.id]); return r.score >= r.max; };
+  const closed = t => !!draft.locked[t.id] && known(t) && correct(t);
   const nav = h('div', { class: 'safety-nav' });
-  // допуск — только когда ВСЕ вопросы закрыты и отвечены верно; пересчитывается при каждом ответе и при повторе
+  const handles = [];
+  const checkAll = () => {
+    handles.forEach((hd, i) => { if (hd && !draft.locked[checks[i].id]) hd.lock(); });
+    refresh();
+  };
+  // допуск — только когда ВСЕ вопросы закрыты и отвечены верно; пересчитывается при каждом ответе, при повторе и при ответе сервера
   const refresh = () => {
     const ok = checks.every(closed);
     if (draft.safetyOk !== ok) { draft.safetyOk = ok; save(); }
+    const open = checks.filter(t => !draft.locked[t.id]);
+    const ready = open.length > 0 && handles.every((hd, i) => !hd || draft.locked[checks[i].id] || hd.ready());
+    const waiting = checks.some(t => draft.locked[t.id] && !known(t));
     nav.replaceChildren(ok
       ? h('button', { class: 'btn primary big', type: 'button', onclick: toPractice }, 'К практике →')
-      : h('p', { class: 'hint' }, 'Практика откроется, когда все ответы будут верными. После ошибки прочитайте пояснение и ответьте ещё раз.'));
+      : [open.length ? h('button', { class: 'btn primary big', type: 'button', disabled: !ready, onclick: checkAll }, 'Проверить ответы') : '',
+        h('p', { class: 'hint', role: 'status' }, waiting
+          ? 'Проверяю ответы… Практика откроется, когда все ответы будут верными.'
+          : 'Практика откроется, когда все ответы будут верными. После ошибки прочитайте пояснение и ответьте ещё раз.')]);
   };
 
   const mountCard = (t, i, card) => {
@@ -292,11 +306,12 @@ export function safetyV4(ctx) {
     card.replaceChildren(
       h('div', { class: 'task-title' }, h('span', {}, `Проверочный вопрос ${i + 1} из ${checks.length}`), h('span', { class: 'pill pts' }, 'Инструктаж · без баллов')),
       h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer);
-    mountTask(t, {
-      body, feedback, footer, noSkip: true, // «Пропустить» нет: допуск к практике только по верным ответам
-      onLock: refresh,
-      lockedFooter: () => (correct(t) ? '' : h('button', { class: 'btn primary big', type: 'button', onclick: () => {
-        // новая попытка: ответ и закрытие вопроса сбрасываются, число попыток уходит в сдачу
+    handles[i] = mountTask(t, {
+      body, feedback, footer, noSkip: true, batch: true, // «Пропустить» нет: допуск к практике только по верным ответам
+      onLock: refresh, onAnswer: refresh, onReveal: refresh,
+      lockedFooter: () => (!known(t) || correct(t) ? '' : h('button', { class: 'btn primary big', type: 'button', onclick: () => {
+        // новая попытка: ответ и закрытие вопроса сбрасываются, число попыток уходит в сдачу.
+        // Задание уже раскрыто сервером (ключи у клиента), поэтому повтор проверяется на месте; баллов за инструктаж нет
         delete draft.answers[t.id];
         delete draft.locked[t.id];
         draft.safetyAttempts = (Number.isInteger(draft.safetyAttempts) ? draft.safetyAttempts : 0) + 1;
@@ -336,7 +351,8 @@ export function markCard(grade, title) {
     h('div', { class: 'mark-big', 'aria-label': `Отметка: ${MARK_LABEL[m.mark]}` }, MARK_LABEL[m.mark]),
     h('p', { class: 'muted mark-pct' }, `${m.pct} % от баллов`, m.preliminary ? ' · предварительно, без ручных заданий' : ''),
     capped ? h('p', { class: 'hint mark-cap' }, '⭐ не выполнено, поэтому отметка не выше «4».') : '',
-    m.preliminary ? h('p', { class: 'hint' }, `Ручные задания (до ${grade.manualMax} б.) проверит преподаватель, после этого отметка станет окончательной.`) : '');
+      m.preliminary ? h('p', { class: 'hint' }, `Ручные задания (до ${grade.manualMax} б.) проверит преподаватель, после этого отметка станет окончательной.`) : '',
+      grade.items.some(i => i.type === 'python') ? h('p', { class: 'hint' }, 'Баллы Python предварительные: преподаватель проверит код и подтвердит их. До подтверждения они не учитываются в итоговых баллах и рейтинге.') : '');
 }
 
 // ---------- итоги и рефлексия: цель → результат, пройдено, мои ошибки, отметка, «Сдать работу» ----------
@@ -344,7 +360,7 @@ export function markCard(grade, title) {
 const SELF_LEVELS = [[2, '✅', 'Умею'], [1, '🟡', 'Частично'], [0, '⬜', 'Пока нет']];
 
 export function reflectV4(ctx) {
-  const { view, lesson, draft, save, show, header, tools, grid, switchVariant, deadlineNote, preview, openGlossary, submit } = ctx;
+  const { view, lesson, draft, save, show, header, tools, grid, switchVariant, deadlineNote, preview, openGlossary, submit, plural, chk } = ctx;
   const sealed = !!(ctx.sealed && ctx.sealed()); // контрольная: баллы, ошибки и отметка скрыты до окончания
   const variant = draft.variant;
   const grade = gradeLesson(lesson, draft.answers, variant);
@@ -448,8 +464,21 @@ export function reflectV4(ctx) {
   }
   refreshGate();
 
+  // задания, которые ещё ждут проверки сервером: итоги и отметка обновятся, когда придёт ответ (не мешая набору текста)
+  const waitN = pendingCount(draft);
+  if (chk) {
+    chk.onReveal(() => {
+      if (draft.stage !== 'reflect' && draft.stage !== 'finish') return;
+      if (document.activeElement === area) area.addEventListener('blur', () => { if (draft.stage === 'reflect') show(); }, { once: true });
+      else show();
+    });
+  }
+  const waitNote = waitN && plural
+    ? h('p', { class: 'hint', role: 'status' }, `${waitN} ${plural(waitN, 'задание ждёт', 'задания ждут', 'заданий ждут')} проверки: баллы и отметка обновятся, когда придёт ответ. Работу можно сдать и сейчас.`) : '';
+
   view.append(header(), tools(true, false, true), grid('reflect', null, [
     goalCard, sealed ? '' : doneCard, sealed ? '' : mistakesCard,
+    waitNote,
     sealed ? sealedResultCard() : markCard(grade, 'Предварительная отметка'),
     deadlineNote(),
     submitBtn, gateNote, errLine,

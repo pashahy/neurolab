@@ -6,10 +6,14 @@ import { v4Submission } from '../grading-v4.js';
 import { isV4 } from '../lesson-v4-model.js';
 import { isV2, allTasks, hasVariants, practiceTasks, wordCount, readMinutes, sortedGlossary } from '../lesson-model.js';
 import { lessonDebt } from '../debts.js';
-import { loadCourse, loadLesson, isLessonOpen, courseAccess, deadlineInfo, teacherGrade } from '../content.js';
+import { loadCourse, isLessonOpen, courseAccess, deadlineInfo, teacherGrade } from '../content.js';
 import { lessonKey } from '../store.js';
 import { identityChanged } from '../nav.js';
 import { repairDraft, answerWriter } from '../draft.js';
+import { loadSealedLesson, isSealedLesson } from '../sealed-content.js';
+import { restoreDraftTasks, pendingCount, needsKey, isSealedTask, checkTask, canonIds, SOFT_TYPES } from '../sealed-state.js';
+import { createTaskChecker, MSG } from '../task-check.js';
+import { confirmedGrade } from '../python-review.js';
 import { xpGain, levelFor, newBadges, BADGES } from '../gamification.js';
 import { buildSubmission, LIMIT_TEXT, holdText, rejectText } from '../submit.js';
 import { queuedLive } from './queued-live.js';
@@ -37,7 +41,7 @@ export async function renderLesson(app, discipline, n) {
   let lesson;
   try {
     if (preview) lesson = (await import(discipline === 'demo4' ? '../../content/demo-v4.js' : discipline === 'demo2' ? '../../content/demo-v2.js' : '../../content/demo.js')).default;
-    else { course = await loadCourse(discipline); lesson = await loadLesson(discipline, n); }
+    else { course = await loadCourse(discipline); lesson = await loadSealedLesson(discipline, n); }
   } catch {
     if (app.routeId !== my) return;
     app.root.replaceChildren(h('div', { class: 'card' }, h('p', {}, 'Не удалось загрузить занятие. Проверьте интернет и попробуйте ещё раз.'), h('a', { class: 'btn', href: back }, '← Назад')));
@@ -97,7 +101,13 @@ export async function renderLesson(app, discipline, n) {
     app.api.myComments(60000).then(c => { if (app.routeId === my) draw(c); }, () => { /* нет связи: останется то, что уже показано */ });
     return slot;
   };
-  const draft = repairDraft(app.store.getDraft(key), lesson);
+  // задания с ответом сервера в черновике восстанавливаются сразу — до repairDraft, чьи проверки смотрят на ключи
+  const rawDraft = app.store.getDraft(key);
+  if (!sealedNow() && rawDraft && rawDraft.rv) Object.keys(rawDraft.rv).forEach(id => {
+    if (rawDraft.rv[id] && rawDraft.rv[id].hidden) delete rawDraft.rv[id];
+  });
+  restoreDraftTasks(lesson, rawDraft);
+  const draft = repairDraft(rawDraft, lesson);
   // Владелец занятия — студент, под которым оно открыто. Если в другой вкладке сменили аккаунт, чужие данные не пишем и не отправляем.
   const owner = preview ? null : app.store.studentId();
   const ownerChanged = () => !preview && identityChanged(owner, app.store.studentId());
@@ -111,6 +121,8 @@ export async function renderLesson(app, discipline, n) {
   };
   const saveDraft = (k, d) => { if (ownerChanged()) { evict(); return; } app.store.setDraft(k, d); };
   const save = () => saveDraft(key, draft);
+  // очередь проверок запечатанного занятия на сервере (ожидающие из черновика поднимаются при запуске, ниже перед show())
+  const chk = createTaskChecker({ api: app.api, lesson, discipline, kind: 'lesson', getDraft: () => draft, save, isActive: () => !closed && !evicted && app.routeId === my });
   const view = h('div', { class: 'lesson' });
   app.root.replaceChildren(view);
   const who = CHARACTERS[lesson.story.from];
@@ -145,7 +157,7 @@ export async function renderLesson(app, discipline, n) {
 
   // контекст экранов v4 (./lesson-v4.js): они вызываются из show() и task()
   const v4ctx = () => ({
-    view, lesson, course, acc, draft, save, show, header, tools, grid, mountTask, deadlineNote, preview, plural, practice, switchVariant,
+    view, lesson, course, acc, draft, save, show, header, tools, grid, mountTask, chk, deadlineNote, preview, plural, practice, switchVariant,
     openGlossary, submit: submitV4, openHomework, commentSlot, sealed: sealedNow,
     // ДЗ (./homework.js): свой черновик, лимит попыток — в store
     app, key, discipline, back, saveDraft, ownerChanged, evict, isActive: () => app.routeId === my && !evicted,
@@ -155,6 +167,7 @@ export async function renderLesson(app, discipline, n) {
   const openHomework = level => homeworkV4(v4ctx(), level);
 
   function show() {
+    chk.onReveal(null); // слушатель прежнего экрана (итоги) больше не нужен
     view.replaceChildren();
     view.className = 'lesson';
     window.scrollTo(0, 0);
@@ -288,10 +301,16 @@ export async function renderLesson(app, discipline, n) {
   // Общая логика задания (практика и контрольные вопросы лекции): отрисовка, «Проверить», «Пропустить», обратная связь.
   // ui: { body, feedback, footer, lockedFooter?() — содержимое подвала после проверки, onLock(), onSkip(), skipConfirm?, noSkip? — без «Пропустить» }
   // ui.draft / ui.save / ui.isActive / ui.redraw — необязательно: ДЗ v4 хранит ответы в своём черновике (ключ "<ПЗ>#hw")
+  // ui.checker — очередь проверок (у ДЗ своя); ui.batch — без кнопки «Проверить» у задания (на экране одна кнопка на все: лекция, инструктаж),
+  // ui.onAnswer() — ответ изменился; ui.onReveal() — сервер раскрыл задание (пояснение, балл).
+  // Запечатанное задание (t.sl, ключей и пояснения в файле нет): «Проверить» закрывает его локально (ответ заморожен), проверка идёт через сервер
+  // (js/task-check.js); до ответа сервера задание рисуется незакрытым в <fieldset disabled>, «Далее» доступно сразу.
+  // Возвращает { lock(), ready() } — для общей кнопки «Проверить ответы».
   function mountTask(t, ui) {
     const type = TASK_TYPES[t.type];
     const D = ui.draft || draft;
     const S = ui.save || save;
+    const checker = ui.checker || chk;
     const active = ui.isActive || (() => !closed && app.routeId === my);
     const redraw = ui.redraw || show;
     // задание занято (идёт загрузка файла): «Сохранить ответ» и «Пропустить» недоступны
@@ -307,6 +326,12 @@ export async function renderLesson(app, discipline, n) {
     };
     const { body, feedback, footer } = ui;
     const showFeedback = r => {
+      if (sealedNow()) { sealedAnswer(body, feedback); return; }
+      if (t.type === 'python') {
+        feedback.replaceChildren(h('div', { class: 'fb pending' }, h('strong', {}, `Предварительно: ${r.score} из ${r.max} б.`),
+          h('p', {}, 'Локальная проверка Python. Баллы засчитает преподаватель после проверки кода.')));
+        return;
+      }
       if (type.manual && D.answers[t.id] === null) {
         feedback.replaceChildren(h('div', { class: 'fb wrong' }, h('strong', {}, 'Задание пропущено'), h('p', {}, 'За него 0 баллов.')));
         return;
@@ -322,15 +347,50 @@ export async function renderLesson(app, discipline, n) {
         t.explain ? h('div', { html: md(t.explain) }) : ''));
       if (cls === 'right') celebrate(feedback);
     };
+    // задание закрыто, но сервер ещё не раскрыл его: ответ заморожен, под заданием — статус проверки
+    const waiting = () => !!D.locked[t.id] && needsKey(t);
+    const showPending = () => {
+      const skipped = D.answers[t.id] === null;
+      feedback.replaceChildren(h('div', { class: 'fb pending', role: 'status' },
+        h('strong', {}, skipped ? 'Задание пропущено' : '⏳ Ответ принят'),
+        h('p', { class: 'fb-wait' }, checker.textOf(t.id) || MSG.sending)));
+    };
+    const renderPending = () => {
+      const fs = h('fieldset', { class: 'sealed-fs', disabled: true });
+      body.replaceChildren(fs);
+      type.render(t, fs, { ...extra, answer: D.answers[t.id], onChange: () => {}, locked: false });
+    };
+    const renderLocked = () => {
+      body.replaceChildren();
+      type.render(t, body, { ...extra, answer: D.answers[t.id], onChange: () => {}, locked: true });
+    };
+    // ответ сервера: задание восстановлено на месте — рисуем обычную обратную связь
+    const onRevealed = () => {
+      if (!active() || !D.locked[t.id]) return;
+      if (D.rv && D.rv[t.id] && D.rv[t.id].hidden) { sealedAnswer(body, feedback); drawFooter(); }
+      if (!isSealedTask(t)) {
+        if (SOFT_TYPES.indexOf(t.type) < 0) renderLocked(); // у «мягких» тело уже нарисовано, обновляется только пояснение
+        showFeedback(checkTask(t, D.answers[t.id]));
+        drawFooter();
+      }
+      if (ui.onReveal) ui.onReveal();
+    };
+    const onStatus = () => {
+      if (!active() || !waiting() || !feedback.isConnected) return;
+      const p = feedback.querySelector('.fb-wait');
+      if (p) p.textContent = checker.textOf(t.id) || MSG.sending;
+    };
+    if (isSealedTask(t)) checker.watch(t.id, { onStatus, onReveal: onRevealed });
     function lock() {
-      if (busy) return;
+      if (busy || D.locked[t.id]) return;
       D.locked[t.id] = true;
       S();
-      if (sealedNow()) sealedAnswer(body, feedback);
-      else {
-        body.replaceChildren();
-        type.render(t, body, { ...extra, answer: D.answers[t.id], onChange: () => {}, locked: true });
-        showFeedback(type.check(t, D.answers[t.id]));
+      if (isSealedTask(t)) {
+        if (needsKey(t)) { renderPending(); showPending(); } else { renderLocked(); showFeedback(checkTask(t, D.answers[t.id])); }
+        checker.request(t);
+      } else {
+        renderLocked();
+        showFeedback(checkTask(t, D.answers[t.id]));
       }
       drawFooter();
       if (ui.onLock) ui.onLock();
@@ -341,24 +401,24 @@ export async function renderLesson(app, discipline, n) {
       if (!type.manual || D.answers[t.id] === undefined) D.answers[t.id] = null;
       D.locked[t.id] = true;
       S();
+      if (isSealedTask(t)) checker.request(t);
       ui.onSkip();
     }
     function drawFooter() {
       if (D.locked[t.id]) { footer.replaceChildren(ui.lockedFooter ? ui.lockedFooter() : ''); return; }
       footer.replaceChildren(
-        h('button', { class: 'btn primary big', type: 'button', disabled: busy || !type.ready(t, D.answers[t.id]), onclick: lock }, type.manual ? 'Сохранить ответ' : 'Проверить'),
+        ui.batch ? '' : h('button', { class: 'btn primary big', type: 'button', disabled: busy || !type.ready(t, D.answers[t.id]), onclick: lock }, type.manual ? 'Сохранить ответ' : 'Проверить'),
         ui.noSkip ? '' : h('button', { class: 'link-btn', type: 'button', disabled: busy, onclick: skip }, 'Пропустить задание'));
     }
     const locked = !!D.locked[t.id];
     // ответ может прийти после сохранения/пропуска задания, сдачи работы или ухода с экрана — тогда он не пишется
-    const onChange = answerWriter(D, t.id, { isActive: active, onWrite: () => { S(); drawFooter(); } });
+    const onChange = answerWriter(D, t.id, { isActive: active, onWrite: () => { S(); drawFooter(); if (ui.onAnswer) ui.onAnswer(); } });
     try {
-      if (locked && sealedNow()) sealedAnswer(body, feedback);
-      else {
+      if (waiting()) { renderPending(); showPending(); drawFooter(); } else {
         type.render(t, body, { ...extra, answer: D.answers[t.id], locked, onChange: locked ? () => {} : onChange });
-        if (locked) showFeedback(type.check(t, D.answers[t.id]));
+        if (locked) showFeedback(checkTask(t, D.answers[t.id]));
+        drawFooter();
       }
-      drawFooter();
     } catch (e) {
       // устаревший ответ (занятие изменили) — сбрасываем его; без ответа ошибку не прячем, чтобы не зациклиться
       if (D.answers[t.id] === undefined && !D.locked[t.id]) throw e;
@@ -368,9 +428,10 @@ export async function renderLesson(app, discipline, n) {
       S();
       redraw();
     }
+    return { lock, ready: () => !D.locked[t.id] && !busy && type.ready(t, D.answers[t.id]) };
   }
 
-  // ---------- лекция (v2): один раздел за раз, затем его контрольные вопросы ----------
+  // ---------- лекция (v2): один раздел за раз, затем его контрольные вопросы (все видны сразу, одна кнопка «Проверить ответы») ----------
   function lecture() {
     const secs = lesson.lecture;
     const N = secs.length;
@@ -382,13 +443,27 @@ export async function renderLesson(app, discipline, n) {
     const bar = h('div', { class: 'bar' });
     const progress = h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Прогресс лекции', 'aria-valuemin': '0', 'aria-valuemax': '100' }, bar);
     const checksBox = h('div', { class: 'lec-checks' });
+    const checkAllBox = h('div', { class: 'lec-check-all' });
     const nav = h('div', { class: 'lec-nav' });
+    const handles = [];
     const doneCount = () => checks.filter(c => draft.locked[c.id]).length;
     const allDone = () => doneCount() === checks.length;
+    // открытые вопросы раздела: все отвечены (или пропущены) — можно проверять одним запросом
+    const openChecks = () => checks.filter(c => !draft.locked[c.id]);
+    const checkAll = () => {
+      handles.forEach((hd, i) => { if (hd && !draft.locked[checks[i].id]) hd.lock(); });
+      refresh();
+    };
     const refresh = () => {
       const pct = Math.round((k + (checks.length ? doneCount() / checks.length : 1)) / N * 100);
       bar.style.width = `${pct}%`;
       progress.setAttribute('aria-valuenow', String(pct));
+      const open = openChecks();
+      const ready = open.length > 0 && handles.every((hd, i) => !hd || draft.locked[checks[i].id] || hd.ready());
+      checkAllBox.replaceChildren(open.length
+        ? [h('button', { class: 'btn primary big', type: 'button', disabled: !ready, onclick: checkAll }, 'Проверить ответы'),
+          ready ? '' : h('p', { class: 'hint' }, 'Ответьте на все вопросы или пропустите их, затем нажмите «Проверить ответы».')]
+        : '');
       nav.replaceChildren(
         k > 0 ? h('button', { class: 'btn ghost big', type: 'button', onclick: () => go(k - 1) }, `← Назад к разделу ${k}`) : '',
         h('button', { class: 'btn primary big', type: 'button', disabled: !allDone(), onclick: () => (k === N - 1 ? toPractice() : go(k + 1)) }, k === N - 1 ? 'К практике →' : 'Дальше →'),
@@ -397,7 +472,6 @@ export async function renderLesson(app, discipline, n) {
     const go = i => { draft.section = i; save(); show(); };
     const toPractice = () => { draft.stage = practiceStage(); save(); show(); };
 
-    let shown = 0;
     function mountCard(i) {
       const t = checks[i];
       const body = h('div', { class: 'task-body' });
@@ -408,18 +482,13 @@ export async function renderLesson(app, discipline, n) {
         h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer);
       checksBox.append(card);
       const ui = {
-        body, feedback, footer,
-        onLock: () => { revealNext(true); refresh(); },
-        onSkip: () => { body.replaceChildren(); feedback.replaceChildren(); mountTask(t, ui); revealNext(true); refresh(); },
+        body, feedback, footer, batch: true,
+        onLock: refresh, onAnswer: refresh,
+        onSkip: () => { body.replaceChildren(); feedback.replaceChildren(); handles[i] = mountTask(t, ui); refresh(); },
       };
-      mountTask(t, ui);
-      return card;
+      handles[i] = mountTask(t, ui);
     }
-    function revealNext(scroll) {
-      let added = null;
-      while (shown < checks.length && (shown === 0 || draft.locked[checks[shown - 1].id])) { added = mountCard(shown); shown++; }
-      if (scroll && added && added.scrollIntoView) added.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    checks.forEach((_, i) => mountCard(i));
 
     add(view, header(), tools(false), progress,
       grid('lecture', [
@@ -428,9 +497,8 @@ export async function renderLesson(app, discipline, n) {
         h('div', { class: 'lecture-body', html: md(s.body) }),
       ], [
         checks.length ? h('div', { class: 'lec-checks-head' }, h('h3', {}, '✅ Проверьте себя')) : '',
-        checksBox, nav,
+        checksBox, checkAllBox, nav,
       ], 'Текст раздела'));
-    revealNext(false);
     refresh();
   }
 
@@ -572,11 +640,14 @@ export async function renderLesson(app, discipline, n) {
     const all = allTasks(lesson, draft.variant);
     const errLine = h('p', { class: 'error', role: 'alert' });
     const submitBtn = h('button', { class: 'btn primary big', type: 'button', onclick: submitNow }, preview ? 'Завершить демо' : '📤 Сдать работу');
+    const waitN = pendingCount(draft);
+    chk.onReveal(() => { if (draft.stage === 'finish' && !closed) show(); }); // баллы обновятся, когда придёт проверка
     add(view, header(),
       sealedNow() ? sealedResultCard() : h('div', { class: 'card result' },
         withVariants ? h('span', { class: 'pill' }, `${VARIANTS[draft.variant].icon} Вариант: ${VARIANTS[draft.variant].short}`) : '',
         h('div', { class: 'big-score' }, `${grade.score} / ${grade.max}`),
         h('p', { class: 'muted' }, 'баллов по автопроверке'),
+        waitN ? h('p', { class: 'hint', role: 'status' }, `${waitN} ${plural(waitN, 'задание ждёт', 'задания ждут', 'заданий ждут')} проверки: баллы обновятся, когда придёт ответ. Работу можно сдать и сейчас.`) : '',
         grade.manualMax ? h('p', { class: 'hint' }, `+ до ${grade.manualMax} б. после проверки преподавателем`) : '',
         h('ol', { class: 'result-items' }, grade.items.map((it, i) => {
           if (!it.manual) return h('li', {}, `${it.score} из ${it.max} б.`);
@@ -615,15 +686,16 @@ export async function renderLesson(app, discipline, n) {
     try {
       sub = buildSubmission({
         profile: app.store.profile(), discipline, lesson, grade, startedAt: draft.startedAt, variant: draft.variant,
-        answers: subAnswers, texts: subTexts, v4: v4 ? { ...v4Submission(lesson, draft, grade), signals: buildSignals(draft, safeStorage(), discipline, n) } : undefined,
+        answers: subAnswers, texts: subTexts, sp: draft.sp === 1, cn: canonIds(draft, subAnswers), v4: v4 ? { ...v4Submission(lesson, draft, grade), signals: buildSignals(draft, safeStorage(), discipline, n) } : undefined,
       });
       if (sealedNow()) { gain = 0; badges = []; levelUp = null; } // контрольная: баллы и опыт — после окончания, с сервера
       else {
-        gain = xpGain(app.store.progress(key), grade);
+        const confirmed = confirmedGrade(grade);
+        gain = xpGain(app.store.progress(key), confirmed);
         const before = levelFor(app.store.state().xp);
-        app.store.recordResult(key, { score: grade.score, max: grade.max, at: new Date().toISOString() });
+        app.store.recordResult(key, { score: confirmed.score, max: confirmed.max, at: new Date().toISOString() });
         app.store.addXp(gain);
-        badges = app.store.addBadges(newBadges(app.store.state(), { perfectTypes: grade.perfectTypes }));
+        badges = app.store.addBadges(newBadges(app.store.state(), { perfectTypes: confirmed.perfectTypes }));
         const after = levelFor(app.store.state().xp);
         levelUp = after.index > before.index ? after : null;
       }
@@ -640,7 +712,7 @@ export async function renderLesson(app, discipline, n) {
     if (app.routeId !== my) return; // например, сессия истекла: сдача в очереди, студента ждёт экран входа
     if (sent && pulse) { submittedOk = true; pulse.kick(); } // доска: сервер принял сдачу → этап «сдал»
     if (sealedNow() && (sent || hold === undefined && !limit && rejected === undefined)) { view.replaceChildren(controlDoneBox(back, !!sent)); window.scrollTo(0, 0); return; }
-    view.replaceChildren(done({ sent, limit, hold, rejected, subId: sub.id, gain, badges, levelUp, perfect: grade.max > 0 && grade.score === grade.max, grade }));
+    view.replaceChildren(done({ sent, limit, hold, rejected, subId: sub.id, gain, badges, levelUp, perfect: grade.max > 0 && confirmedGrade(grade).score === grade.max, grade }));
     window.scrollTo(0, 0);
   }
 
@@ -725,5 +797,6 @@ export async function renderLesson(app, discipline, n) {
       },
     });
   }
+  if (!preview && app.store.session() && isSealedLesson(lesson)) chk.start();
   show();
 }

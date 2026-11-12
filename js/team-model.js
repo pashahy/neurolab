@@ -2,6 +2,7 @@
 // состав сдачи кейса координатором. Серверная часть — блок B8 в apps-script/Code.gs (teamState / teamCreate / teamJoin / teamLeave / teamSubmitCase).
 import { gradeLesson, submissionAnswers, lessonTexts } from './grading.js';
 import { allTasks } from './lesson-model.js';
+import { applyReveal } from './sealed-state.js';
 
 export const TEAM_POLL_MS = 12000;
 export const TEAM_MIN = 2;
@@ -73,6 +74,15 @@ export function applyTeamResult(draft, tasks, result, { coordinator = false } = 
     if (JSON.stringify(draft.answers[t.id]) !== JSON.stringify(next) || !draft.locked[t.id]) changed = true;
     draft.answers[t.id] = next;
     draft.locked[t.id] = true;
+    // защита оценок, этап 2: сервер прислал раскрытие задания (cv) — ответ уже канонический, задание восстанавливается на месте
+    const cv = result.cv && typeof result.cv === 'object' ? result.cv[t.id] : null;
+    if (cv && typeof cv === 'object' && t.sl === 1) {
+      if (Object.prototype.hasOwnProperty.call(cv, 'a')) draft.answers[t.id] = cv.a;
+      if (!draft.cn || typeof draft.cn !== 'object') draft.cn = {};
+      draft.cn[t.id] = 1; // ответ каноничен: applyReveal его не переводит
+      applyReveal(draft, t, { id: t.id, score: cv.s, max: cv.m, rv: cv.rv });
+      changed = true;
+    }
   });
   return changed;
 }
@@ -90,7 +100,14 @@ export function caseSubmission(lesson, draft) {
   const answers = submissionAnswers(lesson, draft.answers, draft.variant);
   const texts = lessonTexts(lesson, draft.answers, draft.variant);
   const pick = o => Object.fromEntries(Object.entries(o).filter(([id]) => ids.has(id)));
-  return { items: g.items.filter(i => ids.has(i.id)), answers: pick(answers), texts: pick(texts) };
+  const out = { items: g.items.filter(i => ids.has(i.id)), answers: pick(answers), texts: pick(texts) };
+  // защита оценок, этап 2: sp — занятие запечатано, cn — ответы кейса, уже переведённые в каноническое пространство
+  if (draft.sp === 1) {
+    out.sp = 1;
+    const cn = Object.keys(draft.cn || {}).filter(id => draft.cn[id] && Object.prototype.hasOwnProperty.call(out.answers, id));
+    if (cn.length) out.cn = cn;
+  }
+  return out;
 }
 
 // Индекс первого задания после текущего, не относящегося к кейсу (участник идёт дальше, пока координатор решает кейс); -1 — таких нет.

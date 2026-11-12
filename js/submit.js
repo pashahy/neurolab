@@ -28,7 +28,8 @@ const failText = e => {
 
 // variant ('phone' | 'pc') — только у занятия с вариантами практики; без него поля в сдаче нет
 // v4 — данные этапов занятия формата v4 (цель, разминка, инструктаж, рефлексия, ⭐); у остальных форматов поля в сдаче нет
-export function buildSubmission({ profile, discipline, lesson, answers, grade, texts, startedAt, variant, v4, now = Date.now(), rnd = Math.random }) {
+// sp — занятие запечатано (сервер переводит ответы в каноническое пространство сам); cn — id ответов, уже переведённых (защита оценок, этап 2)
+export function buildSubmission({ profile, discipline, lesson, answers, grade, texts, startedAt, variant, v4, sp, cn, now = Date.now(), rnd = Math.random }) {
   const sub = {
     id: `${now.toString(36)}-${Math.floor(rnd() * 1e9).toString(36)}`,
     studentId: profile.id,
@@ -46,6 +47,7 @@ export function buildSubmission({ profile, discipline, lesson, answers, grade, t
   };
   if (variant) sub.variant = variant;
   if (v4) sub.v4 = v4;
+  if (sp) { sub.sp = 1; if (Array.isArray(cn) && cn.length) sub.cn = cn; }
   return sub;
 }
 

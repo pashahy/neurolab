@@ -1,7 +1,7 @@
 // «Мой экран»: блок «Защита сейчас» (B2) — имя студента, задание, ответ, оценка 0/1/2 и история защит пары.
 import { h } from '../util/dom.js';
 import { md } from '../util/text.js';
-import { loadLesson } from '../content.js';
+import { loadSealedLesson as loadLesson } from '../sealed-content.js';
 import { errText } from '../ui/login.js';
 import { DEFENSE_SCORES, DEFENSE_MAX, defenseTaskInfo, defenseTaskTitle, defenseAnswerView, defenseHistoryLine, defenseGraded } from './board-defense.js';
 

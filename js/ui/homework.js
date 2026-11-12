@@ -13,6 +13,10 @@ import { holdText, rejectText, LIMIT_TEXT } from '../submit.js';
 // новые имена — из нового модуля: именованный импорт имени, которого нет в старой копии store.js/submit.js из кэша, положил бы сайт
 import { homeworkDraftKey, buildHomeworkSubmission } from '../hw-submit.js';
 import { queuedLive } from './queued-live.js';
+import { isSealedLesson } from '../sealed-content.js';
+import { restoreDraftTasks, pendingCount, canonIds } from '../sealed-state.js';
+import { createTaskChecker } from '../task-check.js';
+import { confirmedGrade } from '../python-review.js';
 
 const HW_MINUTES = 15;
 // В демо (#/demo4) попытки, отметка и XP живут только в памяти страницы и не попадают в данные вошедшего студента
@@ -53,10 +57,16 @@ export function homeworkChooser(ctx, onPick) {
 }
 
 export function homeworkV4(ctx, startLevel) {
-  const { app, lesson, key, discipline, view, back, preview, mountTask, saveDraft, isActive, ownerChanged, evict } = ctx;
+  const { app, lesson, key, discipline, view, back, preview, mountTask, saveDraft, isActive, ownerChanged, evict, plural } = ctx;
   const hwKey = homeworkDraftKey(key);
-  let hd = repairHomeworkDraft(app.store.getDraft(hwKey), lesson);
+  // задания с ответом сервера в черновике ДЗ восстанавливаются сразу, до repairHomeworkDraft
+  const rawHd = app.store.getDraft(hwKey);
+  restoreDraftTasks(lesson, rawHd);
+  let hd = repairHomeworkDraft(rawHd, lesson);
   const saveHd = () => saveDraft(hwKey, hd);
+  // очередь проверок ДЗ (kind 'hw'): свой черновик, свои ожидающие
+  const hwChk = createTaskChecker({ api: app.api, lesson, discipline, kind: 'hw', getDraft: () => hd, save: saveHd, isActive: () => isActive() });
+  const startChecks = () => { if (!preview && app.store.session() && isSealedLesson(lesson)) hwChk.start(); }; // после сдачи очередь остановлена: новая попытка запускает её снова
   const head = title => h('header', { class: 'lesson-head' },
     h('a', { href: back, class: 'back' }, preview ? '← Главная' : '← Карта курса'),
     h('div', { class: 'lesson-meta' }, `${preview ? 'Демо' : discipline.toUpperCase()} · ПЗ №${lesson.number} · Домашнее задание`),
@@ -78,10 +88,18 @@ export function homeworkV4(ctx, startLevel) {
     const tasks = homeworkTasks(lesson, level);
     const used = (bank(ctx).homework(key) || { attempts: 0 }).attempts;
     if (!tasks.length || used >= HW_MAX_ATTEMPTS) { hd.level = null; drawChooser(); return; }
+    startChecks();
     const errLine = h('p', { class: 'error', role: 'alert' });
     const submitBtn = h('button', { class: 'btn primary big', type: 'button', onclick: submitHw }, preview ? '📤 Сдать ДЗ (демо)' : '📤 Сдать ДЗ');
     const note = h('p', { class: 'hint hw-note' });
+    const waitNote = h('p', { class: 'hint', role: 'status' });
+    const refreshWait = () => {
+      const n = pendingCount(hd);
+      waitNote.textContent = n ? `${n} ${plural(n, 'задание ждёт', 'задания ждут', 'заданий ждут')} проверки: результат обновится, когда придёт ответ. ДЗ можно сдать и сейчас.` : '';
+    };
+    hwChk.subscribe(refreshWait);
     const refresh = () => {
+      refreshWait();
       const left = tasks.filter(t => !hd.locked[t.id]).length;
       submitBtn.disabled = left > 0;
       note.textContent = left > 0 ? `Осталось заданий: ${left}. Проверьте ответ или пропустите задание.` : `Готово к сдаче. Попытка ${used + 1} из ${HW_MAX_ATTEMPTS}.`;
@@ -91,7 +109,7 @@ export function homeworkV4(ctx, startLevel) {
       const feedback = h('div', { class: 'feedback', 'aria-live': 'polite' });
       const footer = h('div', { class: 'task-footer' });
       const ui = {
-        body, feedback, footer, draft: hd, save: saveHd, isActive: () => isActive(), redraw: drawTasks,
+        body, feedback, footer, draft: hd, save: saveHd, checker: hwChk, onReveal: () => { if (hd.level === level) refreshWait(); }, isActive: () => isActive(), redraw: drawTasks,
         skipConfirm: 'Пропустить задание? За него будет 0 баллов, вернуться к нему нельзя.',
         onLock: refresh,
         onSkip: () => { body.replaceChildren(); feedback.replaceChildren(); mountTask(t, ui); refresh(); },
@@ -104,7 +122,7 @@ export function homeworkV4(ctx, startLevel) {
     mount(head(levelTitle(lesson, level)),
       h('p', { class: 'hint' }, `Попытка ${used + 1} из ${HW_MAX_ATTEMPTS} · ≈ ${HW_MINUTES} мин. Засчитывается лучшая попытка.`),
       ...cards.map(c => c[0]),
-      submitBtn, note, errLine,
+      submitBtn, note, waitNote, errLine,
       h('button', { class: 'btn ghost big', type: 'button', onclick: () => { hd.level = null; saveHd(); drawChooser(); } }, '↩ Другой уровень'));
     cards.forEach(([, ui, t]) => mountTask(t, ui));
     refresh();
@@ -122,9 +140,12 @@ export function homeworkV4(ctx, startLevel) {
       try {
         grade = gradeHomework(lesson, level, hd.answers);
         mark = homeworkMark({ score: grade.score, max: grade.max, level });
-        if (!preview) sub = buildHomeworkSubmission({ profile: app.store.profile(), discipline, lesson, level, grade, startedAt: hd.startedAt, answers: hd.answers });
-        rec = bank(ctx).recordHomework(key, { score: grade.score, max: grade.max, level, mark, at: new Date().toISOString() });
+        if (!preview) sub = buildHomeworkSubmission({ profile: app.store.profile(), discipline, lesson, level, grade, startedAt: hd.startedAt, answers: hd.answers, sp: hd.sp === 1, cn: canonIds(hd, hd.answers) });
+          const confirmed = preview ? grade : confirmedGrade(grade);
+          rec = bank(ctx).recordHomework(key, { score: confirmed.score, max: grade.max, level,
+            mark: homeworkMark({ score: confirmed.score, max: grade.max, level }), at: new Date().toISOString() });
         app.store.clearDraft(hwKey);
+        hwChk.stop();
         hd = repairHomeworkDraft(null, lesson);
       } catch (e) {
         submitBtn.disabled = false;
@@ -161,6 +182,7 @@ export function homeworkV4(ctx, startLevel) {
       h('h2', { class: 'v4-label' }, `Результат · попытка ${rec.attempts} из ${HW_MAX_ATTEMPTS}`),
       h('div', { class: 'big-score' }, `${grade.score} / ${grade.max}`),
       h('p', { class: 'muted' }, 'баллов за ДЗ'),
+        grade.items.some(i => i.type === 'python') ? h('p', { class: 'hint' }, 'Баллы и отметка предварительные: Python проверит преподаватель. В рейтинг войдут только подтверждённые баллы.') : '',
       h('div', { class: `mark-big mark-${mark}` }, MARK_LABEL[mark]),
       level === 'base' && mark === 4 ? h('p', { class: 'hint' }, 'Базовое ДЗ выше «4» не даёт: «5» — за творческое.') : '',
       rec.mark > mark ? h('p', { class: 'hint' }, `Засчитывается лучшая отметка: ${MARK_LABEL[rec.mark]}.`) : '',

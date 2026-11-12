@@ -12,6 +12,7 @@ export const SIGNAL_LABELS = {
   client: 'Python/терминал — баллы клиента',
   noanswers: 'ДЗ без ответов',
   tpl: 'шаблонные тексты автосдачи',
+  legacy: 'ответы в старом формате',
 };
 export const SIGNALS_HINT = 'Повод присмотреться, не доказательство';
 

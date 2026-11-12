@@ -2,13 +2,14 @@ import { TASK_TYPES } from './tasks/registry.js';
 import { round1 } from './util/text.js';
 import { allTasks } from './lesson-model.js';
 import { isAdv } from './lesson-v4.js';
+import { checkTask } from './sealed-state.js';
 
 const sum = (arr, f) => round1(arr.reduce((s, i) => s + f(i), 0));
 
 export function gradeLesson(lesson, answers = {}, variant) {
   const items = allTasks(lesson, variant).map(t => {
     const type = TASK_TYPES[t.type];
-    const r = type.check(t, answers[t.id]);
+    const r = checkTask(t, answers[t.id]); // запечатанное нераскрытое задание — 0 (ждёт проверки сервером)
     const item = { id: t.id, type: t.type, score: r.score, max: r.max, manual: !!type.manual };
     if (isAdv(t)) item.adv = true;
     return item;

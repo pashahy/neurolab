@@ -1,11 +1,14 @@
 import { h } from '../util/dom.js';
 import { md, round1 } from '../util/text.js';
 import { TASK_TYPES } from '../tasks/registry.js';
-import { loadLesson } from '../content.js';
+import { loadSealedLesson as loadLesson, isSealedLesson } from '../sealed-content.js';
+import { taskIndex } from '../sealed-state.js';
+import { restoreTask } from '../seal-model.js';
 import { allTasks, hasVariants, inferVariant } from '../lesson-model.js';
 import { errText } from '../ui/login.js';
 import { discCode, select, fmtTime, hashQuery, loading, loadError, emptyBox } from './common.js';
 import { reviewHref } from './review-team.js';
+import { homeworkTasks } from '../lesson-v4.js';
 import { workSignals, SIGNALS_NOTE } from './signals-view.js';
 import { signalChips, signalCodes, SIGNALS_HINT } from './anticheat-signals.js';
 import { defenseScoreText } from './board-defense.js';
@@ -98,7 +101,7 @@ export async function renderReview(ctx, main) {
     return h('li', { class: 'review-entry' },
       h('a', { class: `review-item${files.length ? ' with-files' : ''}`, href: reviewHref(q) },
         h('span', { class: 'review-main' }, h('strong', {}, q.name), h('span', { class: 'muted' }, ` · ${q.group}`)),
-        h('span', { class: 'review-sub' }, `${discCode(q.discipline)} · ПЗ ${q.lesson}${q.title ? `. ${q.title}` : ''}`),
+        h('span', { class: 'review-sub' }, `${discCode(q.discipline)} · ПЗ ${q.lesson}${q.title ? `. ${q.title}` : ''}${q.kind === 'hw' ? ' · ДЗ' : ''}${q.python ? ' · Python на подтверждении' : ''}`),
         h('span', { class: 'review-meta' }, `${fmtTime(q.time)} · заданий к проверке: ${Array.isArray(q.tasks) ? q.tasks.length : 0}`)),
       signalChips(q.alerts),
       files.length ? h('div', { class: 'review-files' }, files.map(f => fileRow(ctx, f))) : '');
@@ -108,6 +111,22 @@ export async function renderReview(ctx, main) {
 // ---------- карточка работы ----------
 
 const taskMax = t => (t && t.points != null && Number(t.points) > 0 ? Number(t.points) : 1);
+
+// Раскрытие запечатанного занятия для проверки работ: ответы в сдачах каноничны, ключи и пояснения приходят с сервера
+// (adminLessonReveal). Кэш на сессию админки: занятие → { id: { q?, x } }.
+const revealCache = new Map();
+async function revealLesson(ctx, disc, n, lesson) {
+  if (!lesson || !isSealedLesson(lesson)) return;
+  const k = `${disc}/${n}`;
+  let tasks = revealCache.get(k);
+  if (!tasks) {
+    const r = await ctx.call('adminLessonReveal', { code: disc, lesson: n });
+    tasks = r && r.tasks && typeof r.tasks === 'object' ? r.tasks : {};
+    revealCache.set(k, tasks);
+  }
+  const idx = taskIndex(lesson);
+  Object.keys(tasks).forEach(id => { if (idx[id]) restoreTask(idx[id], { q: tasks[id].q, x: tasks[id].x }); });
+}
 
 export async function renderWork(ctx, main) {
   const q = ctx.query;
@@ -125,11 +144,12 @@ export async function renderWork(ctx, main) {
   let lesson = null;
   try {
     const [r, l] = await Promise.all([
-      ctx.call('adminSubmission', teamId ? { team: teamId, discipline: disc, lesson: n } : { studentId, discipline: disc, lesson: n }),
+      ctx.call('adminSubmission', teamId ? { team: teamId, discipline: disc, lesson: n } : { studentId, discipline: disc, lesson: n, ...(wanted ? { submissionId: wanted } : {}) }),
       loadLesson(disc, n).catch(() => null), // файла занятия может не быть — тогда показываем ответы без формулировок
     ]);
     sub = r;
     lesson = l;
+    try { await revealLesson(ctx, disc, n, lesson); } catch (e) { if (e && e.handled) throw e; /* без раскрытия ответы видны, ключей и пояснений нет */ }
   } catch (e) {
     if (!ctx.alive() || (e && e.handled)) return;
     main.replaceChildren(loadError(errText(e), () => ctx.rerender()), h('a', { class: 'btn', href: '#/admin/journal' }, '← К журналу'));
@@ -158,13 +178,14 @@ export async function renderWork(ctx, main) {
     const answers = data.answers && typeof data.answers === 'object' ? data.answers : {};
     const texts = data.texts && typeof data.texts === 'object' ? data.texts : {};
     const items = Array.isArray(data.items) ? data.items : [];
+    const python = data.pythonReview && data.pythonReview.tasks || {};
     // задания того варианта, который сдал студент; у старой сдачи занятия с вариантами варианта нет — определяем по id заданий
     // (у занятия без вариантов вся практика, как раньше)
     const variant = a.variant === 'pc' || a.variant === 'phone' ? a.variant
       : hasVariants(lesson) ? inferVariant(lesson, [...items.map(it => String(it.id)), ...Object.keys(answers)]) : undefined;
     // карточка команды (B8): только задания кейса, сданные командой
     const caseIds = new Set(items.map(it => String(it.id)));
-    const tasks = allTasks(lesson, variant).filter(t => !sub.team || caseIds.has(String(t.id)));
+    const tasks = (a.kind === 'hw' ? homeworkTasks(lesson, a.level) : allTasks(lesson, variant)).filter(t => !sub.team || caseIds.has(String(t.id)));
     chips.replaceChildren(...attempts.map((x, i) => h('button', {
       class: `btn small chip${i === cur ? ' primary' : ''}`, type: 'button', 'aria-pressed': String(i === cur),
       onclick: () => { cur = i; draw(); },
@@ -174,6 +195,9 @@ export async function renderWork(ctx, main) {
 
     // без файла занятия показываем задания по данным сдачи
     const list = tasks.length ? tasks : items.map(it => ({ id: String(it.id), type: it.type, points: it.max, _bare: true }));
+    Object.keys(python).forEach(id => {
+      if (!list.some(t => t.id === id)) list.push({ id, type: 'python', points: python[id].max, _bare: true });
+    });
     const isManual = t => { const ty = TASK_TYPES[t.type]; const it = itemOf(t.id); return ty ? !!ty.manual : !!(it && it.manual); };
     const manualList = list.filter(isManual);
     // максимум ручных баллов — из сдачи (как посчитал клиент студента), без него — по заданиям занятия
@@ -215,11 +239,14 @@ export async function renderWork(ctx, main) {
       const max = taskMax(t);
       const art = h('article', { class: 'work-task card', 'data-task': t.id });
       const answerBox = h('div', { class: 'work-answer' });
-      const raw = own(answers, t.id) ? answers[t.id] : undefined;
+      const py = python[t.id];
+      const raw = py ? { code: py.code } : own(answers, t.id) ? answers[t.id] : undefined;
       // файл: у задания file, у задания без файла занятия и у любой пометки сервера «файл не принят»
       const fa = fileAnswer(raw);
       const asFile = !!fa && (t.type === 'file' || !ty || !!t._bare || fa.fileRejected === true);
-      if (raw === null) answerBox.append(h('p', { class: 'muted' }, 'Задание пропущено.'));
+      if (py) answerBox.append(h('pre', { class: 'work-text' }, py.code || 'Код отсутствует'),
+        h('p', { class: 'hint' }, `Python в браузере: ${py.claimed} из ${py.max} б. · ${py.pending ? 'ожидает подтверждения' : 'подтверждено преподавателем'}`));
+      else if (raw === null) answerBox.append(h('p', { class: 'muted' }, 'Задание пропущено.'));
       else if (asFile) {
         if (!t._bare && Array.isArray(t.rubric) && t.rubric.length) {
           answerBox.append(h('div', { class: 'rubric' }, h('strong', {}, 'Критерии оценки:'), h('ul', {}, t.rubric.map(r => h('li', {}, String(r))))));
@@ -243,8 +270,8 @@ export async function renderWork(ctx, main) {
         answerBox.append(h('div', { class: 'work-text-label' }, 'Текст ответа:'), h('pre', { class: 'work-text' }, String(texts[t.id])));
       }
 
-      let auto = '';
-      if (!manual) {
+      let auto = py ? h('p', { class: 'hint' }, py.pending ? 'Баллы Python ещё не подтверждены' : `Подтверждено: ${py.score} из ${py.max} б.`) : '';
+      if (!manual && !py) {
         let s = null;
         let m = null;
         if (it) { s = Number(it.score); m = Number(it.max); } else if (ty && raw !== undefined && raw !== null && !t._bare) { try { const r = ty.check(t, raw); s = r.score; m = r.max; } catch { /* пропускаем */ } }
@@ -253,10 +280,28 @@ export async function renderWork(ctx, main) {
       art.append(
         h('div', { class: 'work-task-head' }, h('strong', {}, `Задание ${i + 1}`), h('span', { class: 'muted' }, ` · ${TYPE_LABEL[t.type] || t.type}${manual ? ' · ручная проверка' : ''} · ${max} б.`)),
         t.text ? h('div', { class: 'task-text', html: md(t.text) }) : '', // формулировка из файла занятия
-        answerBox, auto, manual ? gradeForm(t, a, max, grades, redrawTotal) : '',
+        answerBox, auto, py ? pythonGradeForm(t, a, py) : manual ? gradeForm(t, a, max, grades, redrawTotal) : '',
         a.defenses && own(a.defenses, t.id) ? h('p', { class: 'work-defense' }, defenseScoreText(a.defenses[t.id].score), a.defenses[t.id].comment ? ` · ${a.defenses[t.id].comment}` : '') : ''); // B2: оценка защиты
       return art;
     }));
+  }
+
+  function pythonGradeForm(t, a, py) {
+    const value = h('input', { type: 'text', inputmode: 'decimal', 'aria-label': `Подтверждённые баллы Python, от 0 до ${py.max}`, value: String(py.pending ? py.claimed : py.score) });
+    const comment = h('textarea', { rows: 2, maxlength: '500', 'aria-label': 'Комментарий к Python' }, py.comment || '');
+    const status = h('p', { class: 'hint', role: 'status' });
+    const button = h('button', { type: 'button', class: 'btn primary' }, py.pending ? 'Подтвердить баллы Python' : 'Изменить баллы Python');
+    button.onclick = async () => {
+      const score = Number(value.value.trim().replace(',', '.'));
+      if (!value.value.trim() || !Number.isFinite(score) || score < 0 || score > py.max) { status.textContent = `Баллы — число от 0 до ${py.max}`; return; }
+      button.disabled = true;
+      try {
+        await ctx.call('adminPythonGrade', { submissionId: a.id, taskId: t.id, score, comment: comment.value });
+        if (ctx.alive()) ctx.rerender();
+      } catch (e) { status.textContent = 'Не удалось сохранить — повторите'; ctx.fail(e, status); }
+      finally { button.disabled = false; }
+    };
+    return h('div', { class: 'grade-form' }, h('label', { class: 'field' }, `Баллы Python (0..${py.max})`, value), comment, status, button);
   }
 
   function gradeForm(t, a, max, grades, onSaved) {
