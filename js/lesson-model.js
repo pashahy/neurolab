@@ -1,6 +1,6 @@
-// Модель занятия: формат v1 (плоский список tasks), v2 (лекция с контрольными вопросами + практика) и v4 (v2 + вход, инструктаж, ⭐, рефлексия, ДЗ).
-// isV2 — «формат с лекцией»: истинно для version 2 и 4; всё, что специфично для v4, — в js/lesson-v4-model.js (isV4) и js/lesson-v4.js.
-export const isV2 = lesson => !!lesson && (lesson.version === 2 || lesson.version === 4);
+// isV2 — формат с подробной лекцией: версии 2, 4 и 5.
+// v5 добавляет вводную теорию, сохраняя самостоятельную часть v4 (js/lesson-flow.js).
+export const isV2 = lesson => !!lesson && (lesson.version === 2 || lesson.version === 4 || lesson.version === 5);
 
 const arr = v => (Array.isArray(v) ? v : []);
 

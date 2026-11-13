@@ -16,6 +16,7 @@ import { renderProfile } from './ui/profile.js';
 import { renderHome } from './ui/home.js';
 import { renderCourse } from './ui/course.js';
 import { renderLesson } from './ui/lesson.js';
+import { renderPresentation } from './ui/lesson-v5.js';
 import { renderRating } from './ui/rating.js';
 import { renderPortfolio } from './ui/portfolio.js';
 import { renderSandbox } from './ui/sandbox.js';
@@ -147,12 +148,12 @@ function softRefresh(id, { force = false } = {}) {
 function rerenderIfStill(id) {
   if (app.routeId !== id) return;
   const [a, , c] = currentPath().split('/').filter(Boolean);
-  if (isDemo(a) || a === 'login' || a === 'admin' || (a === 'd' && c)) return;
+  if (isDemo(a) || a === 'present' || a === 'login' || a === 'admin' || (a === 'd' && c)) return;
   route();
 }
 
-// демо-занятия (#/demo, #/demo2, #/demo4) доступны без входа
-const isDemo = a => a === 'demo' || a === 'demo2' || a === 'demo4';
+// Демо-занятия и показ публичной вводной теории доступны без входа.
+const isDemo = a => a === 'demo' || a === 'demo2' || a === 'demo4' || a === 'demo5';
 
 function route() {
   const raw = location.hash.replace(/^#/, '') || '/';
@@ -162,7 +163,7 @@ function route() {
   const [a, b, c] = path.split('/').filter(Boolean);
   const session = store.session();
   applyTheme(document.documentElement, session ? storedTheme(store) : 'default'); // тема студента (только на этом телефоне)
-  if (!isDemo(a) && a !== 'login' && a !== 'admin' && !session) { location.replace(`#/login?next=${encodeURIComponent(path)}`); return; }
+  if (!isDemo(a) && a !== 'present' && a !== 'login' && a !== 'admin' && !session) { location.replace(`#/login?next=${encodeURIComponent(path)}`); return; }
   if (a === 'login' && session) { location.replace(`#${safeNext(query.get('next'))}`); return; }
   app.routeId++;
   shownStudent = store.studentId();
@@ -170,6 +171,8 @@ function route() {
   app.submittedKey = null;
   app.root.replaceChildren();
   app.root.classList.toggle('admin-root', a === 'admin');
+  app.root.classList.toggle('presentation-root', a === 'present');
+  document.body.classList.toggle('presenting', a === 'present');
   document.body.classList.toggle('no-orbs', a === 'admin'); // без светящихся пятен на экранах админ-панели
   document.body.classList.toggle('pf-print', a === 'portfolio'); // правила печати портфолио (css/portfolio.css) только на его маршруте
   const lessonRoute = a === 'd' && b && c;
@@ -184,6 +187,7 @@ function route() {
   };
   let job;
   if (a === 'admin') job = renderAdmin(app, path.split('/').filter(Boolean).slice(1), query);
+  else if (a === 'present') job = renderPresentation(app, b, Number(c));
   else if (a === 'login') job = renderLogin(app, { next: safeNext(query.get('next')) });
   else if (isDemo(a)) job = renderLesson(app, a, 0); // демо доступно без входа
   else if (a === 'rating') job = renderRating(app);
@@ -193,7 +197,7 @@ function route() {
   else if (a === 'portfolio') job = renderPortfolio(app);
   else if (!lessonRoute && store.me()) { job = render(); } // главная и карта: показываем сохранённое, обновляем в фоне
   else job = gated(id, lessonRoute, render);
-  if (a !== 'login' && !isDemo(a) && a !== 'admin' && !lessonRoute && !(needsMe && !store.me())) softRefresh(id);
+  if (a !== 'login' && !isDemo(a) && a !== 'present' && a !== 'admin' && !lessonRoute && !(needsMe && !store.me())) softRefresh(id);
   if (loginSync && a !== 'login') { // первый экран после медленного входа
     const ls = loginSync;
     loginSync = null;

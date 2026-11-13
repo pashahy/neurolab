@@ -3,7 +3,9 @@ import { md, mdInline } from '../util/text.js';
 import { TASK_TYPES } from '../tasks/registry.js';
 import { submissionParts } from '../grading.js';
 import { v4Submission } from '../grading-v4.js';
-import { isV4 } from '../lesson-v4-model.js';
+import { hasGuidedStages as isV4 } from '../lesson-flow.js';
+import { isV5 } from '../lesson-v5-model.js';
+import { introV5, briefingContent } from './lesson-v5.js';
 import { isV2, allTasks, hasVariants, practiceTasks, wordCount, readMinutes, sortedGlossary } from '../lesson-model.js';
 import { lessonDebt } from '../debts.js';
 import { loadCourse, isLessonOpen, courseAccess, deadlineInfo, teacherGrade } from '../content.js';
@@ -34,13 +36,13 @@ const safeStorage = () => { try { return globalThis.localStorage; } catch { retu
 
 export async function renderLesson(app, discipline, n) {
   const my = app.routeId;
-  const preview = discipline === 'demo' || discipline === 'demo2' || discipline === 'demo4';
+  const preview = discipline === 'demo' || discipline === 'demo2' || discipline === 'demo4' || discipline === 'demo5';
   const back = preview ? '#/' : `#/d/${discipline}`;
   app.root.append(h('p', { class: 'loading' }, 'Загрузка занятия…'));
   let course = null;
   let lesson;
   try {
-    if (preview) lesson = (await import(discipline === 'demo4' ? '../../content/demo-v4.js' : discipline === 'demo2' ? '../../content/demo-v2.js' : '../../content/demo.js')).default;
+    if (preview) lesson = (await import(discipline === 'demo5' ? '../../content/demo-v5.js' : discipline === 'demo4' ? '../../content/demo-v4.js' : discipline === 'demo2' ? '../../content/demo-v2.js' : '../../content/demo.js')).default;
     else { course = await loadCourse(discipline); lesson = await loadSealedLesson(discipline, n); }
   } catch {
     if (app.routeId !== my) return;
@@ -143,7 +145,9 @@ export async function renderLesson(app, discipline, n) {
     h('a', { href: back, class: 'back' }, preview ? '← Главная' : '← Карта курса'),
     h('div', { class: 'lesson-meta' }, `${preview ? 'Демо' : course.code} · ПЗ №${lesson.number} · Тема ${lesson.topic}`),
     h('h1', { class: 'display lesson-title' }, lesson.title),
-    v4 ? h('div', { class: 'lesson-stage' }, h('span', { class: 'pill' }, stageLabel(lesson, draft.stage, { section: draft.section, adv: isAdv(practice()[draft.index]) }))) : '');
+    v4 ? h('div', { class: 'lesson-stage' }, h('span', { class: 'pill' }, isV5(lesson) && draft.stage === 'intro'
+      ? `Вводная теория · ${lesson.briefing?.minutes || 10} мин`
+      : stageLabel(lesson, draft.stage, { section: draft.section, adv: isAdv(practice()[draft.index]) }))) : '');
 
   // Раскладка шага занятия: aside — справочная колонка, main — текущий шаг.
   // От 1100 px это две колонки (см. css/app.css), ниже — одна колонка в порядке aside → main.
@@ -176,7 +180,7 @@ export async function renderLesson(app, discipline, n) {
     if (v4) {
       // вход, цель, разминка, инструктаж и заставка ⭐ — в ./lesson-v4.js; лекция, выбор варианта, практика и итоги — здесь
       const screens = {
-        intro: () => introV4(v4ctx()), goal: () => goalV4(v4ctx()), warmup: () => warmupV4(v4ctx()),
+        intro: () => isV5(lesson) ? introV5(v4ctx()) : introV4(v4ctx()), goal: () => goalV4(v4ctx()), warmup: () => warmupV4(v4ctx()),
         lecture, choose, safety: () => safetyV4(v4ctx()), task, reflect: () => reflectV4(v4ctx()),
         finish: () => reflectV4(v4ctx()), // у v4 'finish' — «сдаётся»; если сдача не дошла до конца, после перезагрузки снова итоги с кнопкой «Сдать работу»
       };
@@ -238,6 +242,7 @@ export async function renderLesson(app, discipline, n) {
 
   // hasSheet: рядом есть шпаргалка — на широком экране она заменяет «Термины» и «Лекция»; withCriteria (v4) — кнопка «📋 Критерии», она остаётся
   const tools = (withLecture, hasSheet, withCriteria) => h('div', { class: `lesson-tools${hasSheet ? ' has-sheet' : ''}${withCriteria ? ' has-crit' : ''}` },
+    isV5(lesson) ? h('button', { class: 'btn small', type: 'button', onclick: () => openModal('Краткая теория', briefingContent(lesson)) }, 'Краткая теория') : '',
     h('button', { class: 'btn small', type: 'button', onclick: openGlossary }, '📖 Термины'),
     withLecture ? h('button', { class: 'btn small', type: 'button', onclick: openLectureReader }, '📚 Лекция') : '',
     withCriteria ? h('button', { class: 'btn small tool-crit', type: 'button', onclick: openCriteria }, '📋 Критерии') : '');

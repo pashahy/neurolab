@@ -1,6 +1,6 @@
 import { isV2, allTasks, hasVariants, practiceTasks } from './lesson-model.js';
 import { V4_STAGES, MISTAKE_REASONS, extraTasks, safetyChecks, isAdv } from './lesson-v4.js';
-import { isV4 } from './lesson-v4-model.js';
+import { hasGuidedStages as isV4 } from './lesson-flow.js';
 import { reflectionFilled, NEXT_MAX } from './grading-v4.js';
 import { cleanPaste } from './signals-v4.js';
 import { isSealedLesson } from './sealed-content.js';

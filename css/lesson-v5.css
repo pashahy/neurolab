@@ -1,0 +1,25 @@
+.v5-intro-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin:1.5rem 0; }
+.v5-intro-head h2 { margin:.7rem 0 0; }
+.v5-lead { font-size:1.2rem; line-height:1.7; max-width:75ch; margin:1.4rem 0 2rem; }
+.v5-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.v5-summary h2,.v5-discussion h2,.v5-start h2 { margin-top:0; font-size:1.3rem; }
+.v5-summary p,.v5-summary li,.v5-start p,.v5-discussion li { line-height:1.65; }
+.v5-summary pre,.v5-slide pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.v5-discussion,.v5-start { margin-top:1rem; }
+.v5-intro-actions { display:grid; gap:1rem; margin:1.5rem 0; }
+body.presenting > header,body.presenting > footer { display:none; }
+#app.presentation-root { max-width:none; padding:0; }
+.v5-presentation { min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; padding:clamp(1rem,2vw,2rem); outline:none; background:var(--bg); }
+.v5-presentation:fullscreen { overflow:auto; }
+.v5-presentation-head { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.v5-presentation-head > span { flex:1; min-width:12rem; }
+.v5-slide { flex:1; width:100%; max-width:1100px; margin:1rem auto; overflow-wrap:anywhere; }
+.v5-slide h1 { font-size:clamp(1.8rem,4vw,3.4rem); line-height:1.15; margin:1rem 0 1.5rem; }
+.v5-slide-body,.v5-slide > ul { font-size:clamp(1.15rem,2.1vw,1.8rem); line-height:1.45; }
+.v5-slide-body p,.v5-slide-body pre { margin:.65em 0; }
+.v5-slide li { margin:.25em 0; }
+.v5-slide-label { font-size:.95rem; text-transform:uppercase; letter-spacing:.09em; }
+.v5-slide-controls { display:flex; justify-content:space-between; align-items:center; gap:1rem; width:100%; max-width:1100px; margin:1rem auto 0; }
+.v5-slide-count { font-variant-numeric:tabular-nums; }
+@media(max-width:650px) { .v5-summary-grid { grid-template-columns:1fr; } .v5-intro-head > a { width:100%; text-align:center; } }
+@media print { .v5-intro-actions,.v5-intro-head > a,.v5-presentation-head,.v5-slide-controls { display:none; } .v5-summary { break-inside:avoid; } }
