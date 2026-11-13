@@ -2,13 +2,13 @@
 // BUILD подставляет tools/publish.sh (хэш коммита); в разработке остаётся 'dev'.
 // Правило: обновления сайта не ломаем — HTML/JS/CSS/контент идут «сеть сначала» (таймаут 4 с, потом кэш),
 // «сначала кэш» — только fonts и icons; vendor не кэшируем. Чужие origin и не-GET не трогаем.
-const BUILD = '809d1f2';
+const BUILD = '218bbf3';
 const CACHE = 'neurolab-' + BUILD;
 const NET_TIMEOUT = 4000;
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png',
   'css/app.css', 'css/admin.css', 'css/board.css', 'css/sandbox.css', 'css/team.css', 'css/themes.css',
-  'js/app.js', 'js/config.js', 'js/store.js', 'js/api.js', 'js/submit.js', 'js/util/dom.js',
+  'js/app.js', 'js/lazy-views.js', 'js/config.js', 'js/store.js', 'js/api.js', 'js/submit.js', 'js/util/dom.js',
   'fonts/onest-cyrillic-wght.woff2',
 ];
 

@@ -12,6 +12,15 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
       // сеть, таймаут, не-2xx — не ответ сервера; экраны показывают «Нет связи» по этому признаку
       const err = new Error(e && e.message ? e.message : 'Нет связи с сервером');
       err.network = true;
+      if (e && e.timeout) err.timeout = true;
+      if (e && e.httpStatus) err.httpStatus = e.httpStatus;
+      if (e && e.badResponse) err.badResponse = true;
+      throw err;
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.ok !== 'boolean') {
+      const err = new Error('Некорректный ответ сервера');
+      err.network = true;
+      err.badResponse = true;
       throw err;
     }
     if (!data.ok) {

@@ -12,17 +12,8 @@ import { registerPWA } from './pwa.js';
 import { safeNext, expiryNext, identityChanged } from './nav.js';
 import { lessonKey } from './store.js';
 import { renderLogin } from './ui/login.js';
-import { renderProfile } from './ui/profile.js';
-import { renderHome } from './ui/home.js';
-import { renderCourse } from './ui/course.js';
-import { renderLesson } from './ui/lesson.js';
-import { renderPresentation } from './ui/lesson-v5.js';
-import { renderRating } from './ui/rating.js';
-import { renderPortfolio } from './ui/portfolio.js';
-import { renderSandbox } from './ui/sandbox.js';
-import { renderCheatsheet } from './ui/cheatsheet.js';
-import { renderAdmin } from './admin/app.js';
 import { startGuard } from './guard.js';
+import { createViewRenderer } from './lazy-views.js';
 
 const store = createStore();
 const LOGIN_WAIT_MS = 10000; // сколько вход ждёт me, прежде чем открыть экран (обновление продолжится в фоне)
@@ -40,6 +31,7 @@ const app = {
   rerender: () => route(),
   submittedKey: null, // ключ занятия, работа по которому только что сдана (для возврата после истечения сессии)
 };
+const renderView = createViewRenderer(app);
 app.submitter = createSubmitter({ store, url: API_URL, onAuthRequired: () => app.authExpired() });
 // Тяжёлые фоновые запросы (оценки, прогресс, рейтинг) — не чаще раза в минуту на студента; пока идёт отправка его работ
 // (запрос в полёте или ждёт повтор, не дольше 5 сбоев подряд) оценки и прогресс откладываются, чтобы сдаче досталась
@@ -82,7 +74,7 @@ if (liveCapable(app.submitter)) watchSubmissions({ submitter: app.submitter, run
 // Доступ нельзя проверить без me. С сохранённым me ждём сервер не дольше maxWaitMs (дальше работаем с кэшем,
 // обновление идёт в фоне); без кэша ждём ответ полностью. false — проверить доступ не удалось.
 app.ensureAccess = async function ensureAccess({ maxWaitMs = 0 } = {}) {
-  const p = app.refreshAccount();
+  const p = app.refreshAccount({ accessOnly: true });
   if (maxWaitMs > 0 && store.me()) await Promise.race([p, delay(maxWaitMs)]); else await p;
   return !!store.me();
 };
@@ -90,12 +82,12 @@ app.ensureAccess = async function ensureAccess({ maxWaitMs = 0 } = {}) {
 app.finishLogin = async function finishLogin(r, next) {
   store.setSession({ token: r.token, student: r.student });
   app.flash = '';
-  // ждём me не дольше LOGIN_WAIT_MS, потом открываем экран; обновление продолжается в фоне.
-  // Прогресс с сервера — сразу после входа, без паузы syncProgress.
+  // Ждём права доступа, затем открываем экран. Оценки и прогресс не задерживают вход;
+  // запрос оценок слегка разнесён по времени при одновременном входе группы.
   let synced = false;
+  await Promise.race([app.refreshAccount({ force: true, accessOnly: true, deferGradesMs: 800 + Math.floor(Math.random() * 1200) }), delay(LOGIN_WAIT_MS)]);
   const prog = app.syncProgress({ force: true });
   prog.then(() => { synced = true; });
-  await Promise.race([Promise.all([app.refreshAccount({ force: true }), prog]), delay(LOGIN_WAIT_MS)]);
   // прогресс не успел к открытию экрана — первый экран после входа перерисуется один раз, когда он придёт (route)
   loginSync = synced ? null : { promise: prog, token: r.token };
   // принудительный проход (не автоматический): очередь только что вошедшего студента не должна ждать чужой запрос,
@@ -181,20 +173,20 @@ function route() {
   window.scrollTo(0, 0);
   const needsMe = a !== 'login' && !isDemo(a) && a !== 'rating' && a !== 'profile' && a !== 'portfolio' && a !== 'sandbox' && a !== 'memo'; // главная, карта курса, занятие
   const render = () => {
-    if (a === 'd' && b && c) return renderLesson(app, b, Number(c));
-    if (a === 'd' && b) return renderCourse(app, b);
-    return renderHome(app);
+    if (a === 'd' && b && c) return renderView('lesson', b, Number(c));
+    if (a === 'd' && b) return renderView('course', b);
+    return renderView('home');
   };
   let job;
-  if (a === 'admin') job = renderAdmin(app, path.split('/').filter(Boolean).slice(1), query);
-  else if (a === 'present') job = renderPresentation(app, b, Number(c));
+  if (a === 'admin') job = renderView('admin', path.split('/').filter(Boolean).slice(1), query);
+  else if (a === 'present') job = renderView('presentation', b, Number(c));
   else if (a === 'login') job = renderLogin(app, { next: safeNext(query.get('next')) });
-  else if (isDemo(a)) job = renderLesson(app, a, 0); // демо доступно без входа
-  else if (a === 'rating') job = renderRating(app);
-  else if (a === 'sandbox') job = renderSandbox(app, [b, c].filter(Boolean), query);
-  else if (a === 'memo') job = renderCheatsheet(app);
-  else if (a === 'profile') job = renderProfile(app);
-  else if (a === 'portfolio') job = renderPortfolio(app);
+  else if (isDemo(a)) job = renderView('lesson', a, 0); // демо доступно без входа
+  else if (a === 'rating') job = renderView('rating');
+  else if (a === 'sandbox') job = renderView('sandbox', [b, c].filter(Boolean), query);
+  else if (a === 'memo') job = renderView('cheatsheet');
+  else if (a === 'profile') job = renderView('profile');
+  else if (a === 'portfolio') job = renderView('portfolio');
   else if (!lessonRoute && store.me()) { job = render(); } // главная и карта: показываем сохранённое, обновляем в фоне
   else job = gated(id, lessonRoute, render);
   if (a !== 'login' && !isDemo(a) && a !== 'present' && a !== 'admin' && !lessonRoute && !(needsMe && !store.me())) softRefresh(id);

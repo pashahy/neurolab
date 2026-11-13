@@ -6,7 +6,10 @@ export const NET_ERROR = 'Нет связи с сервером. Проверь�
 // Строка продублирована в upload.js: между прежними модулями новые именованные импорты не вводим (кэш телефона бывает разнородным)
 export const BUSY_ERROR = 'Сервер занят — повторите через несколько секунд';
 // ошибка сервера показывается как есть; сбой сети и занятый сервер — понятным текстом
-export const errText = e => (e && e.network ? NET_ERROR
+export const errText = e => (e && e.network && e.timeout ? 'Сервер не ответил вовремя. Попробуйте войти ещё раз через несколько секунд.'
+  : e && e.network && [429, 502, 503, 504].includes(e.httpStatus) ? 'Сервер временно недоступен. Попробуйте ещё раз через несколько секунд.'
+  : e && e.network && e.badResponse ? 'Не удалось прочитать ответ сервера. Повторите попытку; если ошибка сохраняется, сообщите преподавателю.'
+  : e && e.network ? NET_ERROR
   : e && (e.busy === true || e.message === 'busy') ? BUSY_ERROR
     : (e && e.message) || 'Не удалось выполнить запрос. Попробуйте ещё раз');
 
@@ -45,6 +48,7 @@ export function renderLogin(app, { next }) {
       await job();
     } catch (e) {
       err.textContent = errText(e);
+      if (e && e.network && !e.timeout && !e.httpStatus && !e.badResponse) err.textContent += ' Если ошибка возникает только по Wi-Fi колледжа, проверьте вход через мобильный интернет и сообщите преподавателю о проблемной сети.';
       btn.disabled = false;
       btn.textContent = label;
     }
