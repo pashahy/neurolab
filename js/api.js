@@ -46,12 +46,21 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
   };
   // одновременные вызовы (несколько карточек комментария, обновление аккаунта) делят один запрос на токен
   let gradesInFlight = null; // { token, promise }
+  let gradesBarrier = null;
+  // Login history has priority over background grades, including comment widgets.
+  const deferGradesUntil = promise => {
+    const barrier = Promise.resolve(promise).catch(() => {});
+    gradesBarrier = barrier;
+    barrier.then(() => { if (gradesBarrier === barrier) gradesBarrier = null; });
+  };
   const myGrades = () => {
     const token = getToken();
     if (gradesInFlight && gradesInFlight.token === token) return gradesInFlight.promise;
     const entry = { token, promise: null };
     entry.promise = (async () => {
       try {
+        if (gradesBarrier) await gradesBarrier;
+        if (getToken() !== token) return {};
         const d = await call('myGrades');
         commentsCache = { token, at: now(), comments: cleanComments(d.comments) };
         return d.grades;
@@ -95,6 +104,7 @@ export function createApi({ url, fetchFn = (...a) => fetch(...a), getToken = () 
       return out;
     },
     myGrades,
+    deferGradesUntil,
     // прогресс студента с сервера {ok, studentId, progress, xp, days}; старый сервер без myProgress — null
     // (сбой сети и истёкшая сессия — исключение, как у остальных запросов)
     myProgress: async () => {

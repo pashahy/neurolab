@@ -83,10 +83,15 @@ app.finishLogin = async function finishLogin(r, next) {
   store.setSession({ token: r.token, student: r.student });
   app.flash = '';
   // Ждём права доступа, затем открываем экран. Оценки и прогресс не задерживают вход;
-  // запрос оценок слегка разнесён по времени при одновременном входе группы.
+  // Сначала получаем историю, затем оценки: фоновые виджеты не создают параллельный запрос оценок.
   let synced = false;
-  await Promise.race([app.refreshAccount({ force: true, accessOnly: true, deferGradesMs: 800 + Math.floor(Math.random() * 1200) }), delay(LOGIN_WAIT_MS)]);
-  const prog = app.syncProgress({ force: true });
+  let releaseGrades;
+  const historyReady = new Promise(resolve => { releaseGrades = resolve; });
+  app.api.deferGradesUntil?.(historyReady);
+  const access = app.refreshAccount({ force: true, accessOnly: true });
+  const prog = access.then(() => app.syncProgress({ force: true }));
+  prog.then(releaseGrades, releaseGrades);
+  await Promise.race([access, delay(LOGIN_WAIT_MS)]);
   prog.then(() => { synced = true; });
   // прогресс не успел к открытию экрана — первый экран после входа перерисуется один раз, когда он придёт (route)
   loginSync = synced ? null : { promise: prog, token: r.token };
@@ -129,6 +134,8 @@ function flushUI() {
 // На главной и карте курса — ещё и прогресс с сервера (syncProgress сам ограничивает частоту).
 function softRefresh(id, { force = false } = {}) {
   const [a0, b0, c0] = currentPath().split('/').filter(Boolean);
+  // Returning from another tab must not start account/grade requests during a lesson or login.
+  if (a0 === 'login' || a0 === 'admin' || a0 === 'present' || isDemo(a0) || (a0 === 'd' && c0)) return;
   const withProgress = !a0 || (a0 === 'd' && !!b0 && !c0);
   Promise.all([app.refreshAccount({ force }), withProgress ? app.syncProgress() : false]).then(([acc, prog]) => {
     if (acc || prog) rerenderIfStill(id);
