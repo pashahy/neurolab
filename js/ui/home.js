@@ -4,6 +4,7 @@ import { loadCourse, flatLessons, courseAccess, deadlineInfo } from '../content.
 import { DISCIPLINES } from '../config.js';
 import { lessonKey } from '../store.js';
 import { pendingBanner } from './pending-banner.js';
+import { historyStatus, historyCountText } from './history-status.js';
 import { debtsCard } from './debts.js';
 import { coursePath, doneStreak, routeStop, pathInputs, progressCount } from './course-path.js';
 
@@ -42,6 +43,7 @@ export async function renderHome(app) {
       h('section', { class: 'home-courses', 'aria-labelledby': 'my-courses' },
         h('h2', { class: 'sec-title', id: 'my-courses' }, 'Мои курсы'),
         pendingBanner(app), // «N работ ждут отправки»: обновляется сама и пропадает, когда всё ушло
+        historyStatus(app),
         debtsCard(app), // «Отработать»: долги, отмеченные преподавателем (скрыт, пока их нет)
         courses)),
     h('section', { class: 'home-paths', 'aria-labelledby': 'course-path' },
@@ -73,7 +75,7 @@ export async function renderHome(app) {
       h('div', { class: `cover c${num}`, 'aria-hidden': 'true' }, h('span', {}, num)),
       h('div', { class: 'course-info' },
         h('div', { class: 'course-title' }, c.short),
-        h('div', { class: 'course-code' }, `${c.code} · сдано ${cnt.done} из ${cnt.total}`),
+        h('div', { class: 'course-code' }, `${c.code} · ${historyCountText(app, cnt.done, cnt.total)}`),
         h('div', { class: 'progress small', role: 'img', 'aria-label': `Сдано ${w}% доступных занятий` }, h('div', { class: 'bar', style: `width:${w}%` }))),
       h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')));
     best = Math.max(best, doneStreak(coursePath(lessons, doneSet, isOpen, Infinity)));

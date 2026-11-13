@@ -37,13 +37,16 @@ export function taskIndex(lesson) {
 const scores = new WeakMap();
 export const setTaskScore = (t, s, m) => { if (isObj(t)) scores.set(t, { s, m }); };
 
-// Первая оценка сервера сохраняется для заданий с баллами. repeatable используется только
+// Первая оценка сервера ограничивает балл сверху; другой неверный ответ не наследует её баллы. repeatable используется только
 // учебным инструктажем без баллов: после раскрытия ключа исправленный ответ проверяется заново.
 export function checkTask(t, a, { repeatable = false } = {}) {
   const type = TASK_TYPES[t.type];
   if (needsKey(t)) return { score: 0, max: t.points == null ? 1 : t.points };
   const o = scores.get(t);
-  if (o && !repeatable && !type.manual && a !== undefined && a !== null) return { score: o.s, max: o.m };
+  if (o && !repeatable && !type.manual && a !== undefined && a !== null) {
+    const current = type.check(t, a);
+    return { score: Math.min(o.s, current.score), max: o.m };
+  }
   return type.check(t, a);
 }
 

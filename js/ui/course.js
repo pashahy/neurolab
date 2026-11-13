@@ -3,6 +3,7 @@ import { loadCourse, flatLessons, courseAccess, deadlineInfo, hasTeacherGrades }
 import { lessonKey } from '../store.js';
 import { coursePath, routeStop, pathInputs, progressCount } from './course-path.js';
 import { pendingBanner } from './pending-banner.js';
+import { historyStatus, historyCountText } from './history-status.js';
 
 export async function renderCourse(app, d) {
   const my = app.routeId;
@@ -29,7 +30,7 @@ export async function renderCourse(app, d) {
   const num = d.slice(-2);
 
   const map = h('div', { class: 'course-map' });
-  add(app.root, pendingBanner(app), h('div', { class: 'course-layout' },
+  add(app.root, pendingBanner(app), historyStatus(app), h('div', { class: 'course-layout' },
     h('aside', { class: 'course-head' },
       h('a', { href: '#/', class: 'back' }, '← Главная'),
       h('div', { class: 'course-head-row' },
@@ -40,7 +41,7 @@ export async function renderCourse(app, d) {
       h('p', { class: 'muted course-full' }, course.title),
       h('div', { class: 'course-stat' },
         h('div', { class: 'progress', role: 'img', 'aria-label': `Сдано ${w}% доступных занятий` }, h('div', { class: 'bar', style: `width:${w}%` })),
-        h('p', { class: 'hint' }, `Сдано ${cnt.done} из ${cnt.total} доступных занятий`)),
+        h('p', { class: 'hint' }, historyCountText(app, cnt.done, cnt.total))),
       now ? h('a', { class: 'btn primary big', href: `#/d/${d}/${now.n}` }, `${app.store.getDraft(lessonKey(d, now.n)) != null ? 'Продолжить' : 'Начать'} ПЗ №${now.n}`) : ''),
     map));
 

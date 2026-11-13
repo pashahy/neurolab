@@ -40,7 +40,7 @@ app.refreshGate = createRefreshGate();
 // старая копия submit.js из кэша телефона может не знать busy(): тогда фоновые запросы не откладываются
 const submitBusy = () => typeof app.submitter.busy === 'function' && app.submitter.busy();
 // прогресс с сервера (другие устройства): при входе и на главной и карте курса, не чаще раза в 2 минуты на студента
-app.syncProgress = createProgressSync({ api: app.api, store, onAuth: () => app.authExpired(), isBusy: submitBusy });
+app.syncProgress = createProgressSync({ api: app.api, store, onAuth: () => app.authExpired(), isBusy: submitBusy, onStatus: () => app.updateHistoryStatus?.() });
 app.loadRating = createRatingLoader({ api: app.api, gate: app.refreshGate, getStudentId: () => store.studentId() }).load;
 
 const currentPath = () => (location.hash.replace(/^#/, '') || '/').split('?')[0];

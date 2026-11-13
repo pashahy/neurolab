@@ -1,5 +1,6 @@
 import { h, add } from '../util/dom.js';
 import { COMPANY } from '../../content/story.js';
+import { connectionCheck } from '../connection-check.js';
 
 export const NET_ERROR = 'Нет связи с сервером. Проверьте интернет';
 // сервер не взял блокировку таблицы (ответ { error: 'busy', busy: true }): ничего не записано, действие можно повторить.
@@ -48,7 +49,6 @@ export function renderLogin(app, { next }) {
       await job();
     } catch (e) {
       err.textContent = errText(e);
-      if (e && e.network && !e.timeout && !e.httpStatus && !e.badResponse) err.textContent += ' Если ошибка возникает только по Wi-Fi колледжа, проверьте вход через мобильный интернет и сообщите преподавателю о проблемной сети.';
       btn.disabled = false;
       btn.textContent = label;
     }
@@ -75,7 +75,8 @@ export function renderLogin(app, { next }) {
     },
     h('label', { class: 'field' }, h('span', {}, 'Логин'), login),
     pw.field, err, btn,
-    h('p', { class: 'hint' }, 'Логин и одноразовый пароль выдаёт преподаватель. Забыли пароль — обратитесь к нему.')));
+    h('p', { class: 'hint' }, 'Логин и одноразовый пароль выдаёт преподаватель. Забыли пароль — обратитесь к нему.'),
+    connectionCheck()));
   }
 
   function showNewPassword(loginValue, oneTime) {

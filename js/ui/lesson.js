@@ -348,9 +348,11 @@ export async function renderLesson(app, discipline, n) {
         return;
       }
       const cls = r.score >= r.max ? 'right' : r.score > 0 ? 'partial' : 'wrong';
+      const capped = type.check(t, D.answers[t.id]).score > r.score;
       feedback.replaceChildren(h('div', { class: `fb ${cls}` },
         h('strong', {}, { right: '✓ Отлично!', partial: '◐ Частично верно', wrong: '✗ Не совсем' }[cls]), ' ',
         h('span', { class: 'fb-score' }, `${r.score} из ${r.max} б.`),
+        capped ? h('p', {}, 'Текущий ответ исправлен, но балл ограничен первой проверкой. После раскрытия ответа повысить балл нельзя.') : '',
         t.explain ? h('div', { html: md(t.explain) }) : ''));
       if (cls === 'right') celebrate(feedback);
     };

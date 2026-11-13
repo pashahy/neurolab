@@ -7,10 +7,16 @@ export const PROGRESS_SYNC_MS = 120000;
 // сессия (ещё и onAuth()), ответ отброшен из-за смены сессии. Старый сервер (null) и отказ сервера («no table») —
 // обычный отсчёт, локальное состояние не меняется. Ответ сливается только в раздел студента, для которого
 // запрашивался, и только если за время запроса сессия не сменилась.
-export function createProgressSync({ api, store, now = () => Date.now(), intervalMs = PROGRESS_SYNC_MS, onAuth = () => {}, isBusy = () => false }) {
+export function createProgressSync({ api, store, now = () => Date.now(), intervalMs = PROGRESS_SYNC_MS, onAuth = () => {}, isBusy = () => false, onStatus = () => {} }) {
   const lastAt = Object.create(null); // studentId -> время последнего запроса
   let inflight = null; // { sid, token, promise }
-  return function syncProgress({ force = false } = {}) {
+  let state = { token: null, phase: 'idle', loaded: false };
+  const status = () => state.token === store.session()?.token ? { phase: state.phase, loaded: state.loaded } : { phase: 'idle', loaded: false };
+  const update = (token, phase) => {
+    state = { token, phase, loaded: phase === 'ready' || (state.token === token && state.loaded) };
+    onStatus(status());
+  };
+  function syncProgress({ force = false } = {}) {
     const s = store.session();
     if (!s) return Promise.resolve(false);
     const sid = s.student.id;
@@ -25,13 +31,21 @@ export function createProgressSync({ api, store, now = () => Date.now(), interva
     const same = () => { const c = store.session(); return !!c && c.token === token; };
     const entry = { sid, token, promise: null };
     inflight = entry; // до запуска: синхронная ошибка api сразу снимет запись в finally
+    update(token, 'loading');
     entry.promise = (async () => {
       try {
         const data = await api.myProgress();
         if (!same()) { unused(); return false; }
-        return store.mergeServerProgress(data, sid);
+        if (!data || data.ok !== true || data.studentId !== sid || !data.progress || typeof data.progress !== 'object' || Array.isArray(data.progress)) {
+          update(token, 'error');
+          return false;
+        }
+        const changed = store.mergeServerProgress(data, sid);
+        update(token, 'ready');
+        return changed;
       } catch (e) {
         if (e && (e.network || e.auth)) unused();
+        if (same()) update(token, 'error');
         if (e && e.auth && same()) onAuth();
         return false;
       } finally {
@@ -39,5 +53,7 @@ export function createProgressSync({ api, store, now = () => Date.now(), interva
       }
     })();
     return entry.promise;
-  };
+  }
+  syncProgress.status = status;
+  return syncProgress;
 }
