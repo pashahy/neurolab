@@ -143,10 +143,10 @@ export async function renderLesson(app, discipline, n) {
 
   const header = () => h('header', { class: 'lesson-head' },
     h('a', { href: back, class: 'back' }, preview ? '← Главная' : '← Карта курса'),
-    h('div', { class: 'lesson-meta' }, `${preview ? 'Демо' : course.code} · ПЗ №${lesson.number} · Тема ${lesson.topic}`),
+    h('div', { class: 'lesson-meta' }, preview ? 'Демо' : `${course.code} · ПЗ №${lesson.number} · Тема ${lesson.topic}`),
     h('h1', { class: 'display lesson-title' }, lesson.title),
-    v4 ? h('div', { class: 'lesson-stage' }, h('span', { class: 'pill' }, isV5(lesson) && draft.stage === 'intro'
-      ? `Вводная теория · ${lesson.briefing?.minutes || 10} мин`
+    v4 ? h('div', { class: 'lesson-stage' }, h('span', { class: 'pill lesson-stage-label' }, isV5(lesson) && draft.stage === 'intro'
+      ? `Вводная теория с преподавателем · ${lesson.briefing?.minutes || 10} мин`
       : stageLabel(lesson, draft.stage, { section: draft.section, adv: isAdv(practice()[draft.index]) }))) : '');
 
   // Раскладка шага занятия: aside — справочная колонка, main — текущий шаг.
@@ -170,7 +170,7 @@ export async function renderLesson(app, discipline, n) {
   });
   const openHomework = level => homeworkV4(v4ctx(), level);
 
-  function show() {
+  function show({ focusStage = false } = {}) {
     chk.onReveal(null); // слушатель прежнего экрана (итоги) больше не нужен
     view.replaceChildren();
     view.className = 'lesson';
@@ -185,9 +185,16 @@ export async function renderLesson(app, discipline, n) {
         finish: () => reflectV4(v4ctx()), // у v4 'finish' — «сдаётся»; если сдача не дошла до конца, после перезагрузки снова итоги с кнопкой «Сдать работу»
       };
       (screens[draft.stage] || screens.intro)();
-      return;
+    } else {
+      ({ intro, lecture, choose, task, finish }[draft.stage] || intro)();
     }
-    ({ intro, lecture, choose, task, finish }[draft.stage] || intro)();
+    if (focusStage) {
+      const heading = view.querySelector('.task-counter') || view.querySelector('.lesson-main h2') || view.querySelector('.lesson-title');
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+    }
   }
 
   // ---------- окно поверх занятия (словарь, чтение лекции) ----------
@@ -332,7 +339,7 @@ export async function renderLesson(app, discipline, n) {
     };
     const { body, feedback, footer } = ui;
     const gradeAnswer = () => checkTask(t, D.answers[t.id], { repeatable: ui.repeatable === true });
-    const showFeedback = r => {
+    const showFeedback = (r, celebrateSuccess = false) => {
       if (sealedNow()) { sealedAnswer(body, feedback); return; }
       if (t.type === 'python') {
         feedback.replaceChildren(h('div', { class: 'fb pending' }, h('strong', {}, `Предварительно: ${r.score} из ${r.max} б.`),
@@ -354,7 +361,7 @@ export async function renderLesson(app, discipline, n) {
         h('span', { class: 'fb-score' }, `${r.score} из ${r.max} б.`),
         capped ? h('p', {}, 'Текущий ответ исправлен, но балл ограничен первой проверкой. После раскрытия ответа повысить балл нельзя.') : '',
         t.explain ? h('div', { html: md(t.explain) }) : ''));
-      if (cls === 'right') celebrate(feedback);
+      if (cls === 'right' && celebrateSuccess) celebrate(feedback);
     };
     // задание закрыто, но сервер ещё не раскрыл его: ответ заморожен, под заданием — статус проверки
     const waiting = () => !!D.locked[t.id] && needsKey(t);
@@ -379,7 +386,7 @@ export async function renderLesson(app, discipline, n) {
       if (D.rv && D.rv[t.id] && D.rv[t.id].hidden) { sealedAnswer(body, feedback); drawFooter(); }
       if (!isSealedTask(t)) {
         if (SOFT_TYPES.indexOf(t.type) < 0) renderLocked(); // у «мягких» тело уже нарисовано, обновляется только пояснение
-        showFeedback(gradeAnswer());
+        showFeedback(gradeAnswer(), true);
         drawFooter();
       }
       if (ui.onReveal) ui.onReveal();
@@ -395,11 +402,11 @@ export async function renderLesson(app, discipline, n) {
       D.locked[t.id] = true;
       S();
       if (isSealedTask(t)) {
-        if (needsKey(t)) { renderPending(); showPending(); } else { renderLocked(); showFeedback(gradeAnswer()); }
+        if (needsKey(t)) { renderPending(); showPending(); } else { renderLocked(); showFeedback(gradeAnswer(), true); }
         checker.request(t);
       } else {
         renderLocked();
-        showFeedback(gradeAnswer());
+        showFeedback(gradeAnswer(), true);
       }
       drawFooter();
       if (ui.onLock) ui.onLock();
@@ -414,10 +421,12 @@ export async function renderLesson(app, discipline, n) {
       ui.onSkip();
     }
     function drawFooter() {
-      if (D.locked[t.id]) { footer.replaceChildren(ui.lockedFooter ? ui.lockedFooter() : ''); return; }
-      footer.replaceChildren(
-        ui.batch ? '' : h('button', { class: 'btn primary big', type: 'button', disabled: busy || !type.ready(t, D.answers[t.id]), onclick: lock }, type.manual ? 'Сохранить ответ' : 'Проверить'),
-        ui.noSkip ? '' : h('button', { class: 'link-btn', type: 'button', disabled: busy, onclick: skip }, 'Пропустить задание'));
+      const locked = !!D.locked[t.id];
+      const action = locked ? ui.lockedFooter?.() : ui.batch ? '' :
+        h('button', { class: 'btn primary big', type: 'button', disabled: busy || !type.ready(t, D.answers[t.id]), onclick: lock }, type.manual ? 'Сохранить ответ' : 'Проверить');
+      if (ui.previous && !locked) ui.previous.disabled = busy;
+      footer.replaceChildren(ui.previous ? h('div', { class: 'task-actions' }, ui.previous, action) : action || '',
+        locked || ui.noSkip ? '' : h('button', { class: 'link-btn', type: 'button', disabled: busy, onclick: skip }, 'Пропустить задание'));
     }
     const locked = !!D.locked[t.id];
     // ответ может прийти после сохранения/пропуска задания, сдачи работы или ухода с экрана — тогда он не пишется
@@ -588,24 +597,33 @@ export async function renderLesson(app, discipline, n) {
   function task() {
     const tasks = practice();
     const total = tasks.length;
+    const index = draft.index;
+    const moveTo = index => { draft.index = index; save(); show({ focusStage: true }); };
+    const previous = index > 0 ? h('button', {
+      class: 'btn ghost big', type: 'button', onclick: () => moveTo(index - 1),
+    }, '← Назад') : null;
     // v4: перед первым ⭐ заданием — заставка с выбором «Начать ⭐» / «Пропустить ⭐»
-    if (v4 && advIntroNeeded(tasks, draft.index, draft.advIntro)) { advIntroV4(v4ctx()); return; }
-    const t = tasks[draft.index];
+    if (v4 && advIntroNeeded(tasks, index, draft.advIntro)) { advIntroV4(v4ctx(), previous); return; }
+    const t = tasks[index];
     // v4: нумерация внутри группы — базовые «Задание k из B», ⭐ «⭐ Задание j из M»
     const advList = v4 ? tasks.filter(isAdv) : [];
     const isStar = v4 && isAdv(t);
     const groupN = isStar ? advList.length : total - advList.length;
-    const groupI = isStar ? draft.index - (total - advList.length) : draft.index;
-    if (team && t.case && teamGate(team, teamCtx(), t)) return; // B8: «Открытое занятие» — экран команды вместо задания кейса
+    const groupI = isStar ? index - (total - advList.length) : index;
+    const caseContext = team && t.case ? teamCtx() : null;
+    if (caseContext && teamGate(team, caseContext, t)) {
+      add(view, previous);
+      return;
+    }
     const type = TASK_TYPES[t.type];
     const body = h('div', { class: 'task-body' });
     const feedback = h('div', { class: 'feedback', 'aria-live': 'polite' });
     const footer = h('div', { class: 'task-footer' });
-    const pct = Math.round(draft.index / total * 100);
+    const pct = Math.round(index / total * 100);
     const caseDef = t.case && Array.isArray(lesson.cases) ? lesson.cases.find(c => c && c.id === t.case) : null;
     // кейс раскрыт у первого задания кейса и свёрнут у следующих
     const caseBlock = caseDef
-      ? h('details', { class: 'case card', open: tasks.findIndex(x => x.case === t.case) === draft.index },
+      ? h('details', { class: 'case card', open: tasks.findIndex(x => x.case === t.case) === index },
         h('summary', {}, `Кейс: ${caseDef.title}`), h('div', { html: md(caseDef.text) }))
       : '';
     const context = lesson.practiceContext?.[t.id];
@@ -614,21 +632,23 @@ export async function renderLesson(app, discipline, n) {
     add(view, header(), v2 ? tools(true, !!sheet, v4) : '',
       grid('practice', sheet, [
         h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Прогресс практики', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { class: 'bar', style: `width:${pct}%` })),
-        h('div', { class: 'task-title' }, h('span', {}, v4 ? `${isStar ? '⭐ Задание' : 'Практика · задание'} ${groupI + 1} из ${groupN}` : `${v2 ? 'Практика · задание' : 'Задание'} ${draft.index + 1} из ${total}`),
+        h('div', { class: 'task-title' }, h('h2', { class: 'task-counter' }, v4 ? `${isStar ? '⭐ Задание' : 'Практика · задание'} ${groupI + 1} из ${groupN}` : `${v2 ? 'Практика · задание' : 'Задание'} ${index + 1} из ${total}`),
           pointsPill(t, type, isStar)),
-        caseBlock, team ? teamBanner(team, teamCtx(), t) : '',
+        caseBlock, caseContext ? teamBanner(team, caseContext, t) : '',
         h('div', { class: 'task-text', html: md(taskText) }), body, feedback, footer, switchVariant(),
       ], 'Шпаргалка'));
 
     const next = () => {
-      if (draft.index === total - 1) draft.stage = v4 ? 'reflect' : 'finish'; else draft.index++;
+      if (index < total - 1) { moveTo(index + 1); return; }
+      draft.stage = v4 ? 'reflect' : 'finish';
       save();
-      show();
+      show({ focusStage: true });
     };
-    const nextBtn = () => h('button', { class: 'btn primary big', type: 'button', onclick: next }, draft.index === total - 1 ? 'К итогам →' : 'Дальше →');
+    const nextBtn = () => h('button', { class: 'btn primary big', type: 'button', onclick: next }, index === total - 1 ? 'К итогам →' : 'Дальше →');
     mountTask(t, {
-      body, feedback, footer, onSkip: next,
-      lockedFooter: team && t.case ? () => teamFooter(team, teamCtx(), t, next, nextBtn) : nextBtn,
+      body, feedback, footer, previous, onSkip: next,
+      skipConfirm: 'Пропустить задание? За него будет 0 баллов. После пропуска изменить ответ нельзя.',
+      lockedFooter: caseContext ? () => teamFooter(team, caseContext, t, () => { if (footer.isConnected) next(); }, nextBtn, previous) : nextBtn,
     });
   }
 
@@ -780,7 +800,11 @@ export async function renderLesson(app, discipline, n) {
 
   // B8: командный кейс («Открытое занятие»): только v4 и настоящая сессия; сервер сам скажет, включён ли режим для этого ПЗ
   const team = v4 && !preview && app.store.session() ? createTeamCtl({ api: app.api, d: discipline, n, storage: safeStorage(), key }) : null;
-  const teamCtx = () => ({ view, header, tools, grid, draft, save, show, practice, lesson, isActive: () => app.routeId === my && !evicted });
+  const teamCtx = () => {
+    const index = draft.index;
+    return { view, header, tools, grid, draft, save, show, practice, lesson,
+      isActive: () => app.routeId === my && !evicted && draft.stage === 'task' && draft.index === index };
+  };
 
   // Контрольная: таймер; по окончании времени (или закрытии преподавателем) работа отправляется сама
   if (ctlRun) {

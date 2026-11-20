@@ -144,11 +144,12 @@ export function goalV4(ctx) {
 export function warmupV4(ctx) {
   const { view, lesson, draft, save, show, header, grid, mountTask, preview } = ctx;
   const tasks = warmupTasks(lesson);
-  const toLecture = () => { draft.stage = 'lecture'; save(); show(); };
+  const toLecture = () => { draft.stage = 'lecture'; delete draft.warmupIndex; save(); show({ focusStage: true }); };
   if (!tasks.length) { toLecture(); return; }
-  // текущее — первое незакрытое; если закрыты все, остаётся последнее (с пояснением и «К лекции →»)
+  // По умолчанию показываем первое незакрытое, при просмотре можно вернуться к пройденным.
   const firstOpen = tasks.findIndex(t => !draft.locked[t.id]);
-  const i = firstOpen >= 0 ? firstOpen : tasks.length - 1;
+  const latest = firstOpen >= 0 ? firstOpen : tasks.length - 1;
+  const i = Math.min(draft.warmupIndex ?? latest, latest);
   const t = tasks[i];
   const last = i === tasks.length - 1;
   const pct = Math.round(i / tasks.length * 100);
@@ -163,15 +164,17 @@ export function warmupV4(ctx) {
       ? h('p', { class: 'warm-repeat muted' }, label)
       : h('a', { class: 'warm-repeat', href: `#/d/${lesson.discipline}/${t.ref}` }, label);
   };
-  const next = () => (last ? toLecture() : show());
+  const moveTo = index => { draft.warmupIndex = index; save(); show({ focusStage: true }); };
+  const next = () => (last ? toLecture() : moveTo(i + 1));
+  const previous = i > 0 ? h('button', { class: 'btn ghost big', type: 'button', onclick: () => moveTo(i - 1) }, '← Назад') : null;
   view.append(header(), grid('warmup', null, [
     h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Прогресс разминки', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct) }, h('div', { class: 'bar', style: `width:${pct}%` })),
-    h('div', { class: 'task-title' }, h('span', {}, `Разминка · задание ${i + 1} из ${tasks.length}`), h('span', { class: 'pill pts' }, 'Разминка · без баллов')),
+    h('div', { class: 'task-title' }, h('h2', { class: 'task-counter' }, `Разминка · задание ${i + 1} из ${tasks.length}`), h('span', { class: 'pill pts' }, 'Разминка · без баллов')),
     i === 0 ? h('p', { class: 'hint' }, 'Несколько вопросов по прошлым занятиям. Баллов нет, ошибаться можно: так мы видим, что повторить.') : '',
     h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer,
   ]));
   mountTask(t, {
-    body, feedback, footer, skipConfirm: 'Пропустить задание? Баллов за разминку нет, но вернуться к нему нельзя.',
+    body, feedback, footer, previous, skipConfirm: 'Пропустить задание? Баллов за разминку нет. После пропуска изменить ответ нельзя.',
     onSkip: next,
     // ссылка «Повторить» — под пояснением, а не в липком подвале: lockedFooter вызывается после showFeedback и при проверке, и при возврате на задание
     lockedFooter: () => {
@@ -234,7 +237,7 @@ export function criteriaCard(lesson, variant) {
 }
 
 // ---------- заставка перед ⭐ ----------
-export function advIntroV4(ctx) {
+export function advIntroV4(ctx, previous) {
   const { view, lesson, draft, save, show, header, tools, grid, practice } = ctx;
   const adv = practice().filter(isAdv);
   const byId = new Map(gradeLesson(lesson, {}, draft.variant).items.map(i => [i.id, i]));
@@ -251,6 +254,7 @@ export function advIntroV4(ctx) {
       h('p', {}, 'Базовая практика пройдена. Эти задания сложнее и необязательны: без них можно перейти к итогам, но отметка «5» без выполненного ⭐ задания недоступна.'),
       h('p', { class: 'muted' }, `Заданий: ${adv.length} · до ${ptsText(partSums(adv, byId))}`)),
     h('button', { class: 'btn primary big', type: 'button', onclick: start }, 'Начать ⭐'),
+    previous,
     h('button', { class: 'btn ghost big', type: 'button', onclick: skip }, 'Пропустить ⭐ и перейти к итогам'),
   ]));
 }

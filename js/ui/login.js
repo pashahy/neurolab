@@ -76,7 +76,8 @@ export function renderLogin(app, { next }) {
     h('label', { class: 'field' }, h('span', {}, 'Логин'), login),
     pw.field, err, btn,
     h('p', { class: 'hint' }, 'Логин и одноразовый пароль выдаёт преподаватель. Забыли пароль — обратитесь к нему.'),
-    connectionCheck()));
+    connectionCheck(),
+    h('a', { class: 'btn ghost', href: '#/demo5' }, 'Посмотреть демоурок')));
   }
 
   function showNewPassword(loginValue, oneTime) {

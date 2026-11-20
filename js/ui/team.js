@@ -217,7 +217,7 @@ export function banner(ctl, c, t) {
 }
 
 // Подвал закрытого задания кейса: у координатора после последнего задания — «Сдать кейс команды», иначе обычное «Дальше».
-export function footer(ctl, c, t, next, normal) {
+export function footer(ctl, c, t, next, normal, previous) {
   if (teamScreen(ctl.st) !== 'work' || !t || !t.case || !readyToSubmitCase(c.practice(), c.draft, c.draft.index)) return normal();
   const err = h('p', { class: 'error', role: 'alert' });
   const btn = h('button', { class: 'btn primary big', type: 'button' }, '📤 Сдать кейс команды');
@@ -225,10 +225,15 @@ export function footer(ctl, c, t, next, normal) {
     if (!confirm('Сдать кейс команды? После сдачи ответы изменить нельзя.')) return;
     err.textContent = '';
     btn.disabled = true;
+    if (previous) previous.disabled = true;
     try {
       await ctl.submitCase(caseSubmission(c.lesson, c.draft));
       if (c.isActive()) next();
-    } catch (e) { err.textContent = errText(e); btn.disabled = false; }
+    } catch (e) {
+      err.textContent = errText(e);
+      btn.disabled = false;
+      if (previous) previous.disabled = false;
+    }
   });
   return h('div', {}, btn, err, h('p', { class: 'hint' }, 'Остальных участников ждут ответы команды; остальную практику каждый сдаёт сам.'));
 }

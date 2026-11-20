@@ -234,9 +234,13 @@ a.course-card:active { transform: scale(0.99); }
 .task-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; font-weight: 700; color: var(--muted); font-size: 0.9rem; margin-top: 12px; }
 .pts { font-weight: 600; }
 .task-title .pill { white-space: normal; }
+.task-counter { font: inherit; margin: 0; scroll-margin-top: 64px; }
 .task-text { font-size: 1.05rem; margin: 6px 0 12px; }
 .task-body { margin-bottom: 12px; }
 .task-footer { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 25%); padding: 16px 0 calc(4px + env(safe-area-inset-bottom)); z-index: 5; }
+.task-actions { display: flex; align-items: flex-start; gap: 8px; }
+.task-actions > .btn.ghost { flex: none; width: auto; }
+.task-actions > :last-child { flex: 1; min-width: 0; }
 .fb { border-radius: 16px; padding: 12px 14px; margin: 8px 0; }
 .fb.right { background: var(--ok-soft); }
 .fb.partial { background: var(--warn-soft); }

@@ -24,14 +24,24 @@ export function introV5(ctx) {
     view.append(h('p', { class: 'error', role: 'alert' }, 'Вводная теория этого занятия пока не подготовлена.'));
     return;
   }
-  view.append(h('div', { class: 'v5-intro-head' },
-    h('div', {}, h('span', { class: 'pill' }, `Вместе с преподавателем · ${lesson.briefing.minutes} мин`), h('h2', {}, lesson.briefing.title)),
-    h('a', { class: 'btn', href: presentationHref(discipline, lesson.number), target: '_blank', rel: 'noopener' }, 'Режим для проектора')),
-  briefingContent(lesson),
-  h('div', { class: 'v5-intro-actions' },
-    ctx.commentSlot ? ctx.commentSlot() : '', ctx.deadlineNote ? ctx.deadlineNote() : '',
-    h('button', { class: 'btn primary big', type: 'button', onclick: () => { draft.stage = 'goal'; save(); show(); } }, 'Перейти к самостоятельной работе →'),
-    ctx.canHomework ? h('button', { class: 'btn', type: 'button', onclick: () => ctx.openHomework() }, '📝 Домашнее задание') : ''));
+  const start = h('button', {
+    class: 'btn primary big', type: 'button',
+    onclick: () => { draft.stage = 'goal'; save(); show({ focusStage: true }); },
+  }, 'Перейти к самостоятельной работе →');
+  view.append(
+    h('div', { class: 'v5-intro-head' },
+      h('h2', {}, lesson.briefing.title),
+      h('nav', { class: 'v5-intro-nav', 'aria-label': 'Переходы по вводной теории' },
+        h('button', { class: 'btn', type: 'button', onclick: () => {
+          start.focus({ preventScroll: true });
+          start.scrollIntoView({ block: 'center' });
+        } }, 'К самостоятельной работе ↓'),
+        h('a', { class: 'btn ghost', href: presentationHref(discipline, lesson.number), target: '_blank', rel: 'noopener' }, 'Режим для проектора'))),
+    briefingContent(lesson),
+    h('div', { class: 'v5-intro-actions' },
+      ctx.commentSlot ? ctx.commentSlot() : '', ctx.deadlineNote ? ctx.deadlineNote() : '',
+      start,
+      ctx.canHomework ? h('button', { class: 'btn', type: 'button', onclick: () => ctx.openHomework() }, '📝 Домашнее задание') : ''));
 }
 
 // Only the public introduction is shown. This view never starts checks, changes a draft or submits work.
@@ -69,13 +79,22 @@ export async function renderPresentation(app, discipline, n) {
           else status.textContent = 'Полноэкранный режим недоступен в этом браузере.';
         } catch { status.textContent = 'Полноэкранный режим недоступен в этом браузере.'; }
       } }, 'На весь экран')),
-    slide, controls, status);
-  function move(delta) { current = Math.max(0, Math.min(slides.length - 1, current + delta)); draw(); }
+    slide, status, controls);
+  function move(delta) {
+    const index = Math.max(0, Math.min(slides.length - 1, current + delta));
+    if (index === current) return;
+    const focused = document.activeElement;
+    current = index;
+    draw();
+    if (focused === next && next.disabled) previous.focus({ preventScroll: true });
+    if (focused === previous && previous.disabled) next.focus({ preventScroll: true });
+    frame.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
   function draw() {
     const s = slides[current];
     slide.replaceChildren(h('p', { class: 'v5-slide-label' }, s.label || 'Ключевая идея'), h('h1', {}, s.title),
       s.questions ? h('ul', {}, s.questions.map(q => h('li', {}, q))) : h('div', { class: 'v5-slide-body', html: md(s.body) }));
-    slide.scrollTop = 0;
     previous.disabled = current === 0;
     next.disabled = current === slides.length - 1;
     count.textContent = `${current + 1} / ${slides.length}`;

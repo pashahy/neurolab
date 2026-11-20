@@ -84,6 +84,7 @@ function repairV4(out, d, lesson, { variant, withVariants, tasks, goalTasks }) {
   const skills = Array.isArray(lesson.goal?.skills) ? lesson.goal.skills.length : 0;
   const g = isObj(d.goal) ? d.goal : {};
   out.goal = { chosen: [...new Set(Array.isArray(g.chosen) ? g.chosen.filter(i => Number.isInteger(i) && i >= 0 && i < skills) : [])], done: g.done === true };
+  if (Number.isInteger(d.warmupIndex) && d.warmupIndex >= 0) out.warmupIndex = d.warmupIndex;
   // изменилось (или не закрыто) задание инструктажа — допуск к практике не действует
   out.safetyOk = d.safetyOk === true && safetyChecks(lesson).every(t => out.locked[t.id]);
   // варианты, для которых экран правил инструктажа уже показан ('all' — занятие без вариантов)
