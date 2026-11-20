@@ -608,6 +608,8 @@ export async function renderLesson(app, discipline, n) {
       ? h('details', { class: 'case card', open: tasks.findIndex(x => x.case === t.case) === draft.index },
         h('summary', {}, `Кейс: ${caseDef.title}`), h('div', { html: md(caseDef.text) }))
       : '';
+    const context = lesson.practiceContext?.[t.id];
+    const taskText = context ? `**Исходные данные**\n\n${context}\n\n${t.text}` : t.text;
     const sheet = cheatSheet();
     add(view, header(), v2 ? tools(true, !!sheet, v4) : '',
       grid('practice', sheet, [
@@ -615,7 +617,7 @@ export async function renderLesson(app, discipline, n) {
         h('div', { class: 'task-title' }, h('span', {}, v4 ? `${isStar ? '⭐ Задание' : 'Практика · задание'} ${groupI + 1} из ${groupN}` : `${v2 ? 'Практика · задание' : 'Задание'} ${draft.index + 1} из ${total}`),
           pointsPill(t, type, isStar)),
         caseBlock, team ? teamBanner(team, teamCtx(), t) : '',
-        h('div', { class: 'task-text', html: md(t.text) }), body, feedback, footer, switchVariant(),
+        h('div', { class: 'task-text', html: md(taskText) }), body, feedback, footer, switchVariant(),
       ], 'Шпаргалка'));
 
     const next = () => {
